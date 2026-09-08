@@ -1,13 +1,18 @@
 {
-  "name": "voxtrade-app",
-  "private": true,
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "scripts": {
-    "dev": "pnpm --filter web dev",
-    "build": "pnpm --recursive run build",
-    "lint": "pnpm --recursive run lint",
-    "typecheck": "pnpm --recursive run typecheck"
-  }
+    "name":  "voxtrade-app",
+    "private":  true,
+    "engines":  {
+                    "node":  "\u003e=18.0.0"
+                },
+    "scripts":  {
+                    "dev":  "pnpm --filter web dev",
+                    "build":  "pnpm --recursive run build",
+                    "lint":  "pnpm --recursive run lint",
+                    "typecheck":  "pnpm --recursive run typecheck"
+                },
+    "pnpm":  {
+                 "onlyBuiltDependencies":  [
+                                               "unrs-resolver"
+                                           ]
+             }
 }
