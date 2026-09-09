@@ -17,7 +17,7 @@
 
 > Part of the **[VoxTrade](https://github.com/voxxtrade)** suite. This repository provides the off-chain infrastructure for Sovereign Voice-to-Voice Commerce, bridging the gap between human merchants, AI Agents, and the Soroban smart contracts.
 
-## 📖 Overview
+## Overview
 
 While the [voxtrade-contract](https://github.com/voxxtrade/voxtrade-contract) repository enforces rigid security limits and cryptographic bounds on-chain, `voxtrade-app` provides the critical off-chain interface required to interact with the system securely.
 
@@ -27,7 +27,7 @@ This repository is built as a strict `pnpm` monorepo containing two core layers:
 
 ---
 
-## 🏗️ System Architecture & RPC Flow
+## System Architecture & RPC Flow
 
 VoxTrade utilizes a highly explicit transaction lifecycle to ensure safety and transparency when interacting with the Stellar network. The SDK manages footprint generation and transaction simulation automatically before prompting the user for a cryptographic signature.
 
@@ -59,7 +59,7 @@ sequenceDiagram
 
 ---
 
-## 📦 Monorepo Structure
+## Monorepo Structure
 
 ```text
 voxtrade-app/
@@ -89,7 +89,7 @@ voxtrade-app/
 
 ---
 
-## 💻 SDK Integration
+## SDK Integration
 
 The `@voxtrade/sdk` is designed to be fully isomorphic, meaning it can be used both in browser environments (hooked into Freighter) and in Node.js backend environments (hooked into server-side keypairs for automated AI agent operations).
 
@@ -137,7 +137,7 @@ await escrow.claim('G_SUPPLIER_PUBLIC_KEY...', 1n, preimage);
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -185,20 +185,20 @@ The Merchant Dashboard will be accessible at [http://localhost:3000](http://loca
 
 ---
 
-## 🔒 Security & Audits
+## Security & Audits
 
 VoxTrade is currently in active development. The smart contracts and off-chain SDKs have **not yet undergone formal security audits**. Please refer to our [SECURITY.md](SECURITY.md) for our responsible disclosure policy and supported versions.
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions from the ecosystem! Whether it's optimizing the SDK's XDR parsing, expanding test coverage, or refining the Next.js dashboard, please read our [CONTRIBUTING.md](CONTRIBUTING.md) to understand our workflow, branch protections, and PR requirements.
 
-## 📞 Maintainers
+## Maintainers
 
 | Role | Contact |
 |---|---|
 | **VoxTrade Core Team** | [GitHub](https://github.com/voxxtrade) |
 
-## ⚖️ License
+## License
 
 Released under the [MIT License](LICENSE).
