@@ -46,7 +46,7 @@ export default function Dashboard() {
         <header className="flex justify-between items-center pb-8 border-b border-slate-800">
           <div>
             <h1 className="text-3xl font-bold">Agent Dashboard</h1>
-            <p className="text-slate-400">Configure and monitor your AI agent's x402 spending bounds.</p>
+            <p className="text-slate-400">Configure and monitor your AI agent&apos;s x402 spending bounds.</p>
           </div>
         </header>
 
