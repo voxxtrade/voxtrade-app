@@ -24,6 +24,9 @@
                             "paths":  {
                                           "@/*":  [
                                                       "./src/*"
+                                                  ],
+                                          "@voxtrade/sdk":  [
+                                                      "../../packages/sdk/src/index.ts"
                                                   ]
                                       }
                         },
