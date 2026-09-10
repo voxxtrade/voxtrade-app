@@ -1,5 +1,7 @@
-import FreighterConnect from '@/components/FreighterConnect';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
+
+const FreighterConnect = dynamic(() => import('@/components/FreighterConnect'), { ssr: false });
 
 export default function Home() {
   return (
