@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --neo-bg: #FEF9EF;
-  --neo-ink: #000000;
+  --canvas-bg: #FAF8F5;
+  --canvas-ink: #0D0F12;
 }
 
 * {
@@ -12,67 +12,62 @@
 }
 
 ::selection {
-  background-color: #000000;
-  color: #FFE600;
+  background-color: #0D0F12;
+  color: #FBBF24;
 }
 
 body {
-  color: #000000;
-  background-color: #FEF9EF;
+  color: #0D0F12;
+  background-color: #FAF8F5;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   overflow-x: hidden;
 }
 
-/* Neo-Brutalist utility patterns */
-.bg-neo-grid {
+/* Sovereign Architectural Blueprint Grid */
+.bg-alabaster-grid {
   background-size: 32px 32px;
   background-image: 
-    linear-gradient(to right, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+    linear-gradient(to right, rgba(13, 15, 18, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(13, 15, 18, 0.05) 1px, transparent 1px);
 }
 
-.bg-neo-dots {
-  background-image: radial-gradient(#000000 1.5px, transparent 1.5px);
-  background-size: 20px 20px;
+.bg-alabaster-dots {
+  background-image: radial-gradient(#0D0F12 1px, transparent 1px);
+  background-size: 18px 18px;
+  opacity: 0.7;
 }
 
-.bg-stripes {
-  background: repeating-linear-gradient(
-    45deg,
-    #000000,
-    #000000 10px,
-    #FFE600 10px,
-    #FFE600 20px
-  );
-}
-
-.bg-stripes-danger {
+/* Premium Amber Accent Striping */
+.bg-stripes-amber {
   background: repeating-linear-gradient(
     -45deg,
-    #000000,
-    #000000 12px,
-    #FF5470 12px,
-    #FF5470 24px
+    #0D0F12,
+    #0D0F12 8px,
+    #D97706 8px,
+    #D97706 16px
   );
 }
 
-/* Hard outline scrollbar */
+/* Tactile Sovereign Scrollbar */
 ::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 9px;
+  height: 9px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #FEF9EF;
-  border-left: 3px solid #000000;
+  background: #F3EFEA;
+  border-left: 2px solid #0D0F12;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #FFE600;
-  border: 3px solid #000000;
+  background: #D97706;
+  border: 2px solid #0D0F12;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #FF5470;
+  background: #B45309;
 }
+
+
+
 

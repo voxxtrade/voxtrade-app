@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isConnected, getPublicKey, requestAccess } from '@stellar/freighter-api';
-import { Wallet, Check, Copy, ExternalLink, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Wallet, Check, Copy, ExternalLink, ShieldCheck, AlertTriangle, Coins } from 'lucide-react';
 
 export default function FreighterConnect() {
   const [publicKey, setPublicKey] = useState<string | null>(null);
@@ -63,45 +63,46 @@ export default function FreighterConnect() {
     return (
       <div className="w-full space-y-2">
         <motion.div 
-          initial={{ scale: 0.95, opacity: 0 }}
+          initial={{ scale: 0.97, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="bg-neo-lime border-4 border-black p-4 shadow-brutal flex flex-col gap-3"
+          className="bg-white border-2 border-obsidian p-3.5 shadow-brutal text-obsidian space-y-2.5"
         >
-          <div className="flex items-center justify-between border-b-2 border-black pb-2">
+          <div className="flex items-center justify-between border-b border-alabaster-subtle pb-2">
             <div className="flex items-center gap-2">
-              <span className="inline-block w-3.5 h-3.5 bg-black border-2 border-black relative">
-                <span className="absolute inset-0.5 bg-neo-yellow animate-ping"></span>
-                <span className="absolute inset-0.5 bg-neo-yellow"></span>
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-jade opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-jade"></span>
               </span>
-              <span className="font-black text-xs tracking-wider uppercase bg-black text-white px-2 py-0.5">
-                FREIGHTER CONNECTED
+              <span className="font-mono text-xs font-bold uppercase tracking-wider text-obsidian flex items-center gap-1.5">
+                <Coins className="w-3.5 h-3.5 text-amber-600" />
+                FREIGHTER AUTHORIZED
               </span>
             </div>
-            <div className="flex items-center gap-1 text-[11px] font-black uppercase text-black bg-white border-2 border-black px-1.5 py-0.5">
-              <ShieldCheck className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase text-amber-900 bg-amber-100 px-2 py-0.5 border border-amber-300 rounded-xs">
+              <ShieldCheck className="w-3 h-3 text-amber-700" />
               <span>TESTNET</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 bg-white border-2 border-black p-2">
-            <span className="font-mono text-xs md:text-sm font-bold truncate text-black">
+          <div className="flex items-center justify-between gap-2 bg-alabaster border border-obsidian/20 p-2 rounded-xs">
+            <span className="font-mono text-xs font-semibold truncate text-obsidian">
               {publicKey.slice(0, 8)}...{publicKey.slice(-8)}
             </span>
             <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               onClick={copyAddress}
               title="Copy Public Key"
-              className="px-2 py-1 bg-neo-yellow hover:bg-yellow-300 text-black border-2 border-black font-mono text-xs font-black flex items-center gap-1 shrink-0"
+              className="px-2.5 py-1 bg-white hover:bg-amber-50 text-obsidian border border-obsidian/30 font-mono text-xs font-bold flex items-center gap-1 shrink-0 shadow-xs"
             >
               {copied ? (
                 <>
-                  <Check className="w-3 h-3 text-black" />
-                  <span>COPIED!</span>
+                  <Check className="w-3 h-3 text-jade" />
+                  <span className="text-jade font-bold">COPIED</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3 h-3 text-black" />
+                  <Copy className="w-3 h-3 text-obsidian/60" />
                   <span>COPY</span>
                 </>
               )}
@@ -113,44 +114,44 @@ export default function FreighterConnect() {
   }
 
   return (
-    <div className="w-full space-y-3">
+    <div className="w-full space-y-2.5">
       <motion.button
-        whileHover={{ x: -2, y: -2, boxShadow: '6px 6px 0px 0px #000000' }}
-        whileTap={{ x: 2, y: 2, boxShadow: '0px 0px 0px 0px #000000' }}
+        whileHover={{ x: -1.5, y: -1.5, boxShadow: '5px 5px 0px 0px #0D0F12' }}
+        whileTap={{ x: 1.5, y: 1.5, boxShadow: '0px 0px 0px 0px #0D0F12' }}
         onClick={handleConnect}
         disabled={isConnecting}
-        className="w-full bg-neo-yellow hover:bg-yellow-300 text-black text-base md:text-lg font-black uppercase tracking-tight py-4 px-6 border-4 border-black shadow-brutal flex items-center justify-center gap-3 transition-colors disabled:opacity-60 disabled:cursor-not-allowed group"
+        className="w-full bg-obsidian hover:bg-obsidian-surface text-white text-sm sm:text-base font-bold uppercase tracking-wider py-4 px-6 border-2 border-obsidian shadow-brutal flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed group cursor-pointer"
       >
-        <Wallet className="w-6 h-6 stroke-[2.5] group-hover:rotate-12 transition-transform" />
+        <Wallet className="w-5 h-5 text-amber-400 group-hover:rotate-6 transition-transform stroke-[2.2]" />
         {isConnecting ? (
-          <span className="animate-pulse tracking-normal">HANDSHAKING FREIGHTER...</span>
+          <span className="font-mono tracking-normal text-xs text-amber-200 animate-pulse">CONNECTING FREIGHTER...</span>
         ) : (
-          <span>CONNECT FREIGHTER WALLET</span>
+          <span className="text-amber-100 group-hover:text-amber-300 transition-colors">CONNECT FREIGHTER WALLET</span>
         )}
       </motion.button>
 
       <AnimatePresence>
         {notInstalled && (
           <motion.div
-            initial={{ opacity: 0, y: -6 }}
+            initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className="p-3 bg-neo-pink border-3 border-black shadow-brutal-sm text-black text-xs font-bold space-y-1.5"
+            exit={{ opacity: 0, y: -4 }}
+            className="p-3 bg-amber-50 border-2 border-amber-600 shadow-brutal-sm text-obsidian text-xs font-medium space-y-1.5"
           >
-            <div className="flex items-center gap-1.5 text-black font-black uppercase">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>Freighter Wallet Extension Not Found!</span>
+            <div className="flex items-center gap-1.5 font-bold uppercase text-amber-900">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-700" />
+              <span>Freighter Extension Not Found</span>
             </div>
-            <p className="font-medium text-[11px] leading-tight">
-              Please install the official Freighter extension to interact with Soroban smart contracts.
+            <p className="text-[11px] leading-tight text-amber-950">
+              Please install the official Freighter wallet extension to authorize transactions and deploy Soroban contracts.
             </p>
             <a
               href="https://www.freighter.app/"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 bg-white hover:bg-black hover:text-white text-black border-2 border-black px-2 py-1 font-mono text-[10px] font-black uppercase transition-colors"
+              className="inline-flex items-center gap-1 bg-obsidian text-amber-300 hover:text-white border border-obsidian px-2 py-1 font-mono text-[10px] font-bold uppercase transition-colors"
             >
-              Get Freighter.app <ExternalLink className="w-3 h-3" />
+              Install Freighter <ExternalLink className="w-3 h-3" />
             </a>
           </motion.div>
         )}
