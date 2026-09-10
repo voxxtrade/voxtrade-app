@@ -20,7 +20,14 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 
-const FreighterConnect = dynamic(() => import('@/components/FreighterConnect'), { ssr: false });
+const FreighterConnect = dynamic(() => import('@/components/FreighterConnect'), { 
+  ssr: false,
+  loading: () => (
+    <div className="h-10 px-4 bg-amber-500 border-2 border-obsidian font-mono text-xs font-bold uppercase flex items-center justify-center opacity-70">
+      CONNECT FREIGHTER
+    </div>
+  )
+});
 
 export default function Home() {
   const [isPlayingAudioSim, setIsPlayingAudioSim] = useState(true);

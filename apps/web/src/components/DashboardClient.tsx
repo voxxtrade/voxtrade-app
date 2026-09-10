@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AgentTreasury } from '@voxtrade/sdk';
 import { isConnected, requestAccess, getPublicKey } from '@stellar/freighter-api';
 import { 
   Terminal as TerminalIcon, 
@@ -74,6 +73,7 @@ export default function DashboardClient() {
         ? 'Test SDF Network ; September 2015' 
         : 'Public Global Stellar Network ; September 2015';
 
+      const { AgentTreasury } = await import('@voxtrade/sdk');
       const treasury = new AgentTreasury(wasmHash, rpcUrl, networkPassphrase);
 
       addLog(`Setting 24H Hard Budget: ${selectedLimit} USDC (${BigInt(selectedLimit * 10_000_000).toString()} stroops)`, 'warn');

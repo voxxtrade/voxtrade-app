@@ -17,7 +17,7 @@ jobs:
         version: 11
     - uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
         cache: 'pnpm'
     
     - run: pnpm install --ignore-scripts
@@ -34,7 +34,7 @@ jobs:
         version: 11
     - uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
         cache: 'pnpm'
     
     - run: pnpm install --ignore-scripts
@@ -50,7 +50,7 @@ jobs:
         version: 11
     - uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
         cache: 'pnpm'
     
     - run: pnpm install --ignore-scripts
