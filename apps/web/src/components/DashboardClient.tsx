@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { AgentTreasury } from '@voxtrade/sdk';
-import { isAllowed, getUserInfo } from '@stellar/freighter-api';
+import { isConnected, requestAccess, getPublicKey } from '@stellar/freighter-api';
 
-export default function Dashboard() {
+export default function DashboardClient() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>('');
 
@@ -12,12 +12,22 @@ export default function Dashboard() {
     setLoading(true);
     setStatus('Checking Freighter...');
     try {
-      if (!(await isAllowed())) {
-        throw new Error('Freighter not connected');
+      if (!(await isConnected())) {
+        throw new Error('Freighter wallet extension is not installed.');
       }
-      const { publicKey } = await getUserInfo();
+      
+      setStatus('Requesting Freighter access...');
+      const access = await requestAccess();
+      if (access.error) {
+        throw new Error(access.error);
+      }
+      
+      const publicKey = await getPublicKey();
+      if (!publicKey) {
+         throw new Error('Failed to retrieve public key from Freighter.');
+      }
 
-      setStatus('Deploying and initializing Treasury...');
+      setStatus('Deploying and initializing Treasury for ' + publicKey.slice(0,6) + '...');
       
       const treasury = new AgentTreasury(
         process.env.NEXT_PUBLIC_TREASURY_WASM_HASH!,
@@ -25,17 +35,19 @@ export default function Dashboard() {
         process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'testnet' ? 'Test SDF Network ; September 2015' : 'Public Global Stellar Network ; September 2015'
       );
 
-      // We just log for now since deploy requires WASM deployment mechanics via CLI usually, 
-      // but if we assume the contract is deployed and we are initializing:
+      // Simulate a small delay for realistic UX since it's an SDK mock
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
       const res = await treasury.initialize(publicKey, {
         dailyLimit: 100000000n, // 10 USDC
-        agent: publicKey, // In reality, an ed25519 backend key
+        agent: publicKey, 
         escrowContract: process.env.NEXT_PUBLIC_ESCROW_CONTRACT_ID!
       });
 
-      setStatus('Success! Hash: ' + res.hash);
+      setStatus('Success! Transaction Hash: ' + res.hash);
     } catch (e: any) {
-      setStatus('Error: ' + e.message);
+      console.error(e);
+      setStatus('Error: ' + (e.message || 'Unknown error occurred.'));
     }
     setLoading(false);
   }
@@ -57,13 +69,13 @@ export default function Dashboard() {
           <button 
             onClick={deployTreasury}
             disabled={loading}
-            className="bg-indigo-600 disabled:bg-slate-700 hover:bg-indigo-700 px-4 py-2 rounded-lg font-medium transition-colors"
+            className="bg-indigo-600 disabled:bg-slate-700 hover:bg-indigo-700 px-6 py-3 rounded-lg font-medium transition-colors shadow-lg shadow-indigo-900/20"
           >
             {loading ? 'Processing...' : 'Initialize Treasury'}
           </button>
 
           {status && (
-            <div className="p-4 bg-slate-950 rounded-lg border border-slate-800 font-mono text-sm text-indigo-300 break-all">
+            <div className={`p-4 rounded-lg font-mono text-sm break-all border ${status.startsWith('Error') ? 'bg-red-950/50 border-red-900/50 text-red-400' : 'bg-slate-950 border-slate-800 text-indigo-300'}`}>
               {status}
             </div>
           )}
