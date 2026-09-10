@@ -143,7 +143,8 @@ export default function Home() {
               href="/dashboard"
               className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-obsidian hover:text-white font-bold text-sm px-5 py-2.5 border-2 border-obsidian shadow-brutal hover:shadow-brutal-md hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none transition-all cursor-pointer"
             >
-              <span>DASHBOARD</span>
+              <Radio className="w-4 h-4 animate-pulse text-obsidian" />
+              <span>VOICE ROOM &amp; DASHBOARD</span>
               <ArrowRight className="w-4 h-4 stroke-[2.5]" />
             </Link>
           </div>
@@ -259,7 +260,8 @@ export default function Home() {
                     href="/dashboard"
                     className="w-full bg-amber-500 hover:bg-amber-600 text-obsidian hover:text-white text-base md:text-lg font-bold uppercase tracking-wider py-4 px-6 border-2 border-obsidian shadow-brutal flex items-center justify-center gap-3 transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-brutal-md active:translate-x-1 active:translate-y-1 active:shadow-none group text-center cursor-pointer"
                   >
-                    <span>Proceed to Dashboard</span>
+                    <Radio className="w-5 h-5 text-obsidian group-hover:text-white" />
+                    <span>Enter Voice Room &amp; Dashboard</span>
                     <ArrowRight className="w-5 h-5 stroke-[2.5] group-hover:translate-x-1.5 transition-transform" />
                   </Link>
 

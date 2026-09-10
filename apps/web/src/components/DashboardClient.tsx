@@ -22,8 +22,18 @@ import {
   Sliders,
   Activity,
   Layers,
-  Sparkles
+  Sparkles,
+  Radio
 } from 'lucide-react';
+
+const VoiceNegotiationRoom = dynamic(() => import('@/components/VoiceNegotiationRoom'), {
+  ssr: false,
+  loading: () => (
+    <div className="p-8 text-center font-mono text-xs text-obsidian bg-white border-2 border-obsidian">
+      LOADING VOICE NEGOTIATION ROOM...
+    </div>
+  ),
+});
 
 const TreasuryManager = dynamic(() => import('@/components/TreasuryManager'), {
   ssr: false,
@@ -53,7 +63,7 @@ export default function DashboardClient() {
   const [copiedHash, setCopiedHash] = useState(false);
   const [selectedLimit, setSelectedLimit] = useState<number>(10); // USDC
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
-  const [dashboardTab, setDashboardTab] = useState<'treasury' | 'escrows' | 'deploy'>('treasury');
+  const [dashboardTab, setDashboardTab] = useState<'voice' | 'treasury' | 'escrows' | 'deploy'>('voice');
 
   const addLog = (text: string, type: 'info' | 'warn' | 'success' | 'error' = 'info') => {
     const time = new Date().toLocaleTimeString();
@@ -261,6 +271,19 @@ export default function DashboardClient() {
         <div className="flex flex-wrap items-center gap-2 border-b-2 border-obsidian pb-2">
           <button
             type="button"
+            onClick={() => setDashboardTab('voice')}
+            className={`px-5 py-3 border-2 font-mono text-xs sm:text-sm font-bold uppercase transition-all flex items-center gap-2 shadow-brutal-sm cursor-pointer ${
+              dashboardTab === 'voice'
+                ? 'bg-amber-500 text-obsidian border-obsidian -translate-y-0.5'
+                : 'bg-white hover:bg-amber-50 text-obsidian/80 border-obsidian/30'
+            }`}
+          >
+            <Radio className="w-4 h-4" />
+            <span>VOICE CALL &amp; CONTRACT DRAFTER</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setDashboardTab('treasury')}
             className={`px-5 py-3 border-2 font-mono text-xs sm:text-sm font-bold uppercase transition-all flex items-center gap-2 shadow-brutal-sm cursor-pointer ${
               dashboardTab === 'treasury'
@@ -298,6 +321,11 @@ export default function DashboardClient() {
             <span>DEPLOY SEQUENCE</span>
           </button>
         </div>
+
+        {/* Tab 0: Voice Negotiation Room & AI Contract Drafter */}
+        {dashboardTab === 'voice' && (
+          <VoiceNegotiationRoom onLog={addLog} connectedWallet={connectedWallet} />
+        )}
 
         {/* Tab 1: Treasury Manager */}
         {dashboardTab === 'treasury' && (
