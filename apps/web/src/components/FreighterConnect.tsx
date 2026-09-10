@@ -1,11 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { isConnected, getPublicKey, requestAccess } from '@stellar/freighter-api';
+import { Wallet, Check, Copy, ExternalLink, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 export default function FreighterConnect() {
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [notInstalled, setNotInstalled] = useState(false);
 
   useEffect(() => {
     async function checkConnection() {
@@ -15,7 +19,7 @@ export default function FreighterConnect() {
           if (key) setPublicKey(key);
         }
       } catch (e) {
-        // Not connected or Freighter not installed
+        // Not connected or Freighter extension not found
       }
     }
     checkConnection();
@@ -23,13 +27,23 @@ export default function FreighterConnect() {
 
   const handleConnect = async () => {
     setIsConnecting(true);
+    setNotInstalled(false);
     try {
-      if (await isConnected()) {
-        await requestAccess();
-        const key = await getPublicKey();
-        if (key) setPublicKey(key);
-      } else {
-        alert('Freighter wallet is not installed!');
+      const connected = await isConnected();
+      if (!connected) {
+        setNotInstalled(true);
+        setIsConnecting(false);
+        return;
+      }
+      
+      const accessRes: any = await requestAccess();
+      if (accessRes?.error) {
+        throw new Error(accessRes.error);
+      }
+      
+      const key = typeof accessRes === 'string' && accessRes.length > 0 ? accessRes : await getPublicKey();
+      if (key) {
+        setPublicKey(key);
       }
     } catch (e) {
       console.error('Failed to connect to Freighter', e);
@@ -38,38 +52,109 @@ export default function FreighterConnect() {
     }
   };
 
+  const copyAddress = () => {
+    if (!publicKey) return;
+    navigator.clipboard.writeText(publicKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (publicKey) {
     return (
-      <div className="flex flex-col items-center space-y-4 w-full">
-        <div className="bg-emerald-900/30 border border-emerald-800/50 text-emerald-400 px-6 py-3 rounded-xl w-full flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <span className="font-medium text-sm">Connected</span>
+      <div className="w-full space-y-2">
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="bg-neo-lime border-4 border-black p-4 shadow-brutal flex flex-col gap-3"
+        >
+          <div className="flex items-center justify-between border-b-2 border-black pb-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-3.5 h-3.5 bg-black border-2 border-black relative">
+                <span className="absolute inset-0.5 bg-neo-yellow animate-ping"></span>
+                <span className="absolute inset-0.5 bg-neo-yellow"></span>
+              </span>
+              <span className="font-black text-xs tracking-wider uppercase bg-black text-white px-2 py-0.5">
+                FREIGHTER CONNECTED
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-[11px] font-black uppercase text-black bg-white border-2 border-black px-1.5 py-0.5">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>TESTNET</span>
+            </div>
           </div>
-          <span className="font-mono text-xs opacity-80">
-            {publicKey.slice(0, 6)}...{publicKey.slice(-4)}
-          </span>
-        </div>
+
+          <div className="flex items-center justify-between gap-2 bg-white border-2 border-black p-2">
+            <span className="font-mono text-xs md:text-sm font-bold truncate text-black">
+              {publicKey.slice(0, 8)}...{publicKey.slice(-8)}
+            </span>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={copyAddress}
+              title="Copy Public Key"
+              className="px-2 py-1 bg-neo-yellow hover:bg-yellow-300 text-black border-2 border-black font-mono text-xs font-black flex items-center gap-1 shrink-0"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3 h-3 text-black" />
+                  <span>COPIED!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3 text-black" />
+                  <span>COPY</span>
+                </>
+              )}
+            </motion.button>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <button
-      onClick={handleConnect}
-      disabled={isConnecting}
-      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl font-medium transition-all shadow-lg shadow-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-    >
-      {isConnecting ? (
-        <span className="animate-pulse">Connecting...</span>
-      ) : (
-        <>
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-          </svg>
-          Connect Freighter
-        </>
-      )}
-    </button>
+    <div className="w-full space-y-3">
+      <motion.button
+        whileHover={{ x: -2, y: -2, boxShadow: '6px 6px 0px 0px #000000' }}
+        whileTap={{ x: 2, y: 2, boxShadow: '0px 0px 0px 0px #000000' }}
+        onClick={handleConnect}
+        disabled={isConnecting}
+        className="w-full bg-neo-yellow hover:bg-yellow-300 text-black text-base md:text-lg font-black uppercase tracking-tight py-4 px-6 border-4 border-black shadow-brutal flex items-center justify-center gap-3 transition-colors disabled:opacity-60 disabled:cursor-not-allowed group"
+      >
+        <Wallet className="w-6 h-6 stroke-[2.5] group-hover:rotate-12 transition-transform" />
+        {isConnecting ? (
+          <span className="animate-pulse tracking-normal">HANDSHAKING FREIGHTER...</span>
+        ) : (
+          <span>CONNECT FREIGHTER WALLET</span>
+        )}
+      </motion.button>
+
+      <AnimatePresence>
+        {notInstalled && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="p-3 bg-neo-pink border-3 border-black shadow-brutal-sm text-black text-xs font-bold space-y-1.5"
+          >
+            <div className="flex items-center gap-1.5 text-black font-black uppercase">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>Freighter Wallet Extension Not Found!</span>
+            </div>
+            <p className="font-medium text-[11px] leading-tight">
+              Please install the official Freighter extension to interact with Soroban smart contracts.
+            </p>
+            <a
+              href="https://www.freighter.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 bg-white hover:bg-black hover:text-white text-black border-2 border-black px-2 py-1 font-mono text-[10px] font-black uppercase transition-colors"
+            >
+              Get Freighter.app <ExternalLink className="w-3 h-3" />
+            </a>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
