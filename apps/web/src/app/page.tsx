@@ -29,6 +29,15 @@ const FreighterConnect = dynamic(() => import('@/components/FreighterConnect'), 
   )
 });
 
+const VoiceMicVisualizer = dynamic(() => import('@/components/VoiceMicVisualizer'), {
+  ssr: false,
+  loading: () => (
+    <div className="p-8 text-center font-mono text-xs text-amber-400 bg-obsidian border border-amber-500/30">
+      LOADING ACOUSTIC MICROPHONE TESTBENCH...
+    </div>
+  ),
+});
+
 export default function Home() {
   const [isPlayingAudioSim, setIsPlayingAudioSim] = useState(true);
   const [simProgress, setSimProgress] = useState(42);
@@ -402,6 +411,11 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Live Microphone Audio & Micropayment Streamer */}
+            <div className="mt-8 pt-8 border-t border-obsidian-subtle">
+              <VoiceMicVisualizer />
             </div>
           </div>
         </div>

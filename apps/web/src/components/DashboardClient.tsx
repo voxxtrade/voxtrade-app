@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isConnected, requestAccess, getPublicKey } from '@stellar/freighter-api';
+import dynamic from 'next/dynamic';
 import { 
   Terminal as TerminalIcon, 
   ArrowLeft, 
@@ -19,8 +20,28 @@ import {
   Lock, 
   CheckCircle2,
   Sliders,
-  Activity
+  Activity,
+  Layers,
+  Sparkles
 } from 'lucide-react';
+
+const TreasuryManager = dynamic(() => import('@/components/TreasuryManager'), {
+  ssr: false,
+  loading: () => (
+    <div className="p-8 text-center font-mono text-xs text-obsidian bg-white border-2 border-obsidian">
+      LOADING TREASURY CONTROLLER...
+    </div>
+  ),
+});
+
+const EscrowMonitor = dynamic(() => import('@/components/EscrowMonitor'), {
+  ssr: false,
+  loading: () => (
+    <div className="p-8 text-center font-mono text-xs text-obsidian bg-white border-2 border-obsidian">
+      LOADING ESCROW TELEMETRY MONITOR...
+    </div>
+  ),
+});
 
 export default function DashboardClient() {
   const [loading, setLoading] = useState(false);
@@ -32,6 +53,7 @@ export default function DashboardClient() {
   const [copiedHash, setCopiedHash] = useState(false);
   const [selectedLimit, setSelectedLimit] = useState<number>(10); // USDC
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
+  const [dashboardTab, setDashboardTab] = useState<'treasury' | 'escrows' | 'deploy'>('treasury');
 
   const addLog = (text: string, type: 'info' | 'warn' | 'success' | 'error' = 'info') => {
     const time = new Date().toLocaleTimeString();
@@ -235,7 +257,60 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        {/* Treasury Configuration Card */}
+        {/* Module Navigation Tabs */}
+        <div className="flex flex-wrap items-center gap-2 border-b-2 border-obsidian pb-2">
+          <button
+            type="button"
+            onClick={() => setDashboardTab('treasury')}
+            className={`px-5 py-3 border-2 font-mono text-xs sm:text-sm font-bold uppercase transition-all flex items-center gap-2 shadow-brutal-sm cursor-pointer ${
+              dashboardTab === 'treasury'
+                ? 'bg-amber-500 text-obsidian border-obsidian -translate-y-0.5'
+                : 'bg-white hover:bg-amber-50 text-obsidian/80 border-obsidian/30'
+            }`}
+          >
+            <Cpu className="w-4 h-4" />
+            <span>TREASURY CONTROLLER</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDashboardTab('escrows')}
+            className={`px-5 py-3 border-2 font-mono text-xs sm:text-sm font-bold uppercase transition-all flex items-center gap-2 shadow-brutal-sm cursor-pointer ${
+              dashboardTab === 'escrows'
+                ? 'bg-amber-500 text-obsidian border-obsidian -translate-y-0.5'
+                : 'bg-white hover:bg-amber-50 text-obsidian/80 border-obsidian/30'
+            }`}
+          >
+            <Lock className="w-4 h-4" />
+            <span>HTLC ESCROW SETTLEMENT</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDashboardTab('deploy')}
+            className={`px-5 py-3 border-2 font-mono text-xs sm:text-sm font-bold uppercase transition-all flex items-center gap-2 shadow-brutal-sm cursor-pointer ${
+              dashboardTab === 'deploy'
+                ? 'bg-amber-500 text-obsidian border-obsidian -translate-y-0.5'
+                : 'bg-white hover:bg-amber-50 text-obsidian/80 border-obsidian/30'
+            }`}
+          >
+            <Play className="w-4 h-4" />
+            <span>DEPLOY SEQUENCE</span>
+          </button>
+        </div>
+
+        {/* Tab 1: Treasury Manager */}
+        {dashboardTab === 'treasury' && (
+          <TreasuryManager onLog={addLog} connectedWallet={connectedWallet} />
+        )}
+
+        {/* Tab 2: Escrow Monitor */}
+        {dashboardTab === 'escrows' && (
+          <EscrowMonitor onLog={addLog} connectedWallet={connectedWallet} />
+        )}
+
+        {/* Tab 3: Treasury Configuration Card */}
+        {dashboardTab === 'deploy' && (
         <section className="bg-white border-2 border-obsidian p-6 sm:p-8 shadow-brutal-xl space-y-6">
           <div className="border-b border-obsidian/15 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -314,20 +389,22 @@ export default function DashboardClient() {
               Requires Freighter wallet approval. Deploys non-custodial contract logic on Stellar Soroban.
             </p>
           </div>
+        </section>
+        )}
 
-          {/* Stylized Console / Terminal Box */}
-          <div className="border-2 border-obsidian bg-obsidian text-white shadow-brutal overflow-hidden rounded-xs">
-            {/* Terminal Top Window Bar */}
-            <div className="bg-obsidian-surface px-4 py-2.5 border-b border-obsidian-subtle flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-amber-500 inline-block border border-obsidian"></span>
-                <span className="w-3 h-3 rounded-full bg-amber-400 inline-block border border-obsidian"></span>
-                <span className="w-3 h-3 rounded-full bg-jade inline-block border border-obsidian"></span>
-                <span className="font-mono text-xs font-bold text-amber-300 ml-2 flex items-center gap-1.5">
-                  <TerminalIcon className="w-4 h-4 text-amber-400" />
-                  AGENT_CONSOLE // STDOUT
-                </span>
-              </div>
+        {/* Stylized Console / Terminal Box */}
+        <div className="border-2 border-obsidian bg-obsidian text-white shadow-brutal overflow-hidden rounded-xs">
+          {/* Terminal Top Window Bar */}
+          <div className="bg-obsidian-surface px-4 py-2.5 border-b border-obsidian-subtle flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-amber-500 inline-block border border-obsidian"></span>
+              <span className="w-3 h-3 rounded-full bg-amber-400 inline-block border border-obsidian"></span>
+              <span className="w-3 h-3 rounded-full bg-jade inline-block border border-obsidian"></span>
+              <span className="font-mono text-xs font-bold text-amber-300 ml-2 flex items-center gap-1.5">
+                <TerminalIcon className="w-4 h-4 text-amber-400" />
+                AGENT_CONSOLE // STDOUT
+              </span>
+            </div>
               
               <button
                 type="button"
@@ -426,7 +503,6 @@ export default function DashboardClient() {
               )}
             </AnimatePresence>
           </div>
-        </section>
 
         {/* Live Simulation Audit Feed */}
         <section className="bg-white border-2 border-obsidian p-6 shadow-brutal-xl">
