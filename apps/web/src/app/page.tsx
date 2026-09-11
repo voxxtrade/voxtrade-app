@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { motion, type Variants } from 'framer-motion';
+import Navbar from '@/components/Navbar';
 import { 
   Lock, 
   Zap, 
@@ -144,75 +145,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Navigation Header */}
-      <header className="border-b-2 border-obsidian bg-white/95 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 bg-obsidian border-2 border-obsidian shadow-brutal-sm flex items-center justify-center font-bold text-amber-400 text-lg group-hover:bg-amber-600 group-hover:text-white transition-colors">
-                VX
-              </div>
-              <div className="flex flex-col">
-                <span className="font-extrabold text-2xl tracking-tight leading-none text-obsidian">
-                  VoxTrade
-                </span>
-                <span className="font-mono text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-0.5">
-                  Voice Commerce // Soroban
-                </span>
-              </div>
-            </Link>
-
-            <span className="hidden sm:inline-block bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 text-xs font-mono font-bold uppercase rounded-xs ml-1">
-              Testnet SDF
-            </span>
-
-            <span className="hidden md:inline-flex items-center gap-1.5 bg-jade/10 text-jade-900 border border-jade/40 px-2.5 py-0.5 text-xs font-mono font-bold uppercase rounded-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-jade animate-pulse"></span>
-              Open Source
-            </span>
-          </div>
-
-          {/* Desktop Navigation Links */}
-          <nav className="hidden xl:flex items-center gap-6 font-mono text-xs font-bold uppercase tracking-wider text-obsidian/80">
-            <a href="#stellar" className="hover:text-amber-700 transition-colors">
-              WHY STELLAR
-            </a>
-            <a href="#telemetry" className="hover:text-amber-700 transition-colors">
-              ACOUSTIC LAB
-            </a>
-            <a href="#protocol" className="hover:text-amber-700 transition-colors">
-              x402 SPEC
-            </a>
-            <a href="#open-source" className="hover:text-amber-700 transition-colors flex items-center gap-1">
-              <span>REPOSITORIES</span>
-              <span className="bg-obsidian text-amber-300 px-1 py-0.2 text-[9px]">2</span>
-            </a>
-          </nav>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* GitHub Links */}
-            <a
-              href="https://github.com/voxxtrade/voxtrade-app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 bg-obsidian hover:bg-obsidian-surface text-amber-300 font-mono text-xs font-bold uppercase px-3.5 py-2.5 border-2 border-obsidian shadow-brutal-sm hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 transition-all cursor-pointer"
-              title="View VoxTrade on GitHub"
-            >
-              <GithubIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">GITHUB</span>
-            </a>
-
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-obsidian hover:text-white font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 border-2 border-obsidian shadow-brutal hover:shadow-brutal-md hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none transition-all cursor-pointer"
-            >
-              <Radio className="w-4 h-4 animate-pulse text-obsidian" />
-              <span>VOICE ROOM &amp; DASHBOARD</span>
-              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-            </Link>
-          </div>
-        </div>
-      </header>
+      {/* Sovereign Navigation Bar */}
+      <Navbar />
 
       {/* Main Hero Section */}
       <section className="relative pt-12 pb-16 md:pt-20 md:pb-24 bg-alabaster bg-alabaster-grid border-b-2 border-obsidian overflow-hidden">
@@ -374,7 +308,7 @@ export default function Home() {
       </section>
 
       {/* Interactive Acoustic Voice Simulation Widget (#telemetry) */}
-      <section id="telemetry" className="py-14 bg-obsidian text-alabaster border-b-2 border-obsidian relative overflow-hidden">
+      <section id="telemetry" className="scroll-mt-20 py-14 bg-obsidian text-alabaster border-b-2 border-obsidian relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-obsidian-surface border-2 border-amber-600/70 shadow-brutal-amber p-6 sm:p-8 rounded-sm">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-obsidian-subtle pb-5 mb-6">
@@ -515,7 +449,7 @@ export default function Home() {
       </section>
 
       {/* DEDICATED STELLAR SECTION: WHY STELLAR & HOW SOROBAN POWERS VOXTRADE (#stellar) */}
-      <section id="stellar" className="py-20 md:py-28 bg-white border-b-2 border-obsidian">
+      <section id="stellar" className="scroll-mt-20 py-20 md:py-28 bg-white border-b-2 border-obsidian">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
           {/* Section Header */}
           <div className="text-center max-w-3xl mx-auto space-y-4">
@@ -832,7 +766,7 @@ export default function Home() {
       </section>
 
       {/* Protocol Architecture Steps (#protocol) */}
-      <section id="protocol" className="py-20 bg-white border-b-2 border-obsidian">
+      <section id="protocol" className="scroll-mt-20 py-20 bg-white border-b-2 border-obsidian">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="border-2 border-obsidian bg-alabaster p-8 md:p-12 shadow-brutal-xl">
             <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4 border-b-2 border-obsidian/15 pb-8">
@@ -885,7 +819,7 @@ export default function Home() {
       </section>
 
       {/* DEDICATED OPEN SOURCE SHOWCASE SECTION (#open-source) */}
-      <section id="open-source" className="py-20 md:py-28 bg-alabaster bg-alabaster-grid border-b-2 border-obsidian">
+      <section id="open-source" className="scroll-mt-20 py-20 md:py-28 bg-alabaster bg-alabaster-grid border-b-2 border-obsidian">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
           {/* Section Header */}
           <div className="text-center max-w-3xl mx-auto space-y-4">
