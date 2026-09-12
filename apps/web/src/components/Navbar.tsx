@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -10,7 +10,8 @@ import {
   Radio, 
   ExternalLink, 
   FileCode, 
-  Code
+  Code,
+  BookOpen
 } from 'lucide-react';
 
 function GithubIcon({ className = 'w-4 h-4' }: { className?: string }) {
@@ -54,6 +55,7 @@ export default function Navbar() {
     { label: 'Acoustic Lab', href: '#telemetry' },
     { label: 'x402 Spec', href: '#protocol' },
     { label: 'Open Source', href: '#open-source' },
+    { label: 'Docs ↗', href: 'https://voxxtrade.github.io/docs/', external: true },
   ];
 
   return (
@@ -88,7 +90,9 @@ export default function Navbar() {
               <a
                 key={link.label}
                 href={link.href}
-                className="px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-obsidian/75 hover:text-obsidian hover:bg-obsidian/5 border border-transparent hover:border-obsidian/20 transition-all rounded-xs"
+                target={link.external ? '_blank' : undefined}
+                rel={link.external ? 'noopener noreferrer' : undefined}
+                className="px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wider text-obsidian/80 hover:text-obsidian hover:bg-amber-100/60 rounded-xs transition-colors cursor-pointer"
               >
                 {link.label}
               </a>
@@ -167,6 +171,29 @@ export default function Navbar() {
                         </div>
                         <p className="font-mono text-[10px] text-obsidian/60 leading-tight mt-0.5">
                           Web application, Voice suite &amp; TypeScript SDK
+                        </p>
+                      </div>
+                    </a>
+
+                    <a
+                      href="https://voxxtrade.github.io/docs/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsGithubMenuOpen(false)}
+                      className="group flex items-start gap-2.5 p-2 hover:bg-amber-50 border border-transparent hover:border-obsidian/20 transition-all text-left"
+                    >
+                      <div className="p-1.5 bg-obsidian text-amber-300 rounded-xs shrink-0 mt-0.5">
+                        <BookOpen className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-bold text-obsidian group-hover:text-amber-700 truncate">
+                            docs (Astro Starlight)
+                          </span>
+                          <ExternalLink className="w-3 h-3 text-obsidian/40 group-hover:text-amber-700 shrink-0 ml-1" />
+                        </div>
+                        <p className="font-mono text-[10px] text-obsidian/60 leading-tight mt-0.5">
+                          Live documentation site, guides &amp; specs
                         </p>
                       </div>
                     </a>
@@ -266,6 +293,19 @@ export default function Navbar() {
                 <span>voxtrade-app (Web &amp; SDK)</span>
               </div>
               <ExternalLink className="w-3.5 h-3.5 text-obsidian/50" />
+            </a>
+            <a
+              href="https://voxxtrade.github.io/docs/"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center justify-between px-3 py-2.5 bg-amber-50 border border-obsidian/20 font-mono text-xs font-bold text-obsidian hover:bg-amber-100"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-amber-700" />
+                <span className="text-amber-900">Official Docs Site</span>
+              </div>
+              <ExternalLink className="w-3.5 h-3.5 text-amber-700" />
             </a>
           </div>
 

@@ -29,7 +29,8 @@ import {
   Database,
   Terminal as TerminalIcon,
   Copy,
-  Check
+  Check,
+  BookOpen
 } from 'lucide-react';
 
 function GithubIcon({ className = 'w-4 h-4' }: { className?: string }) {
@@ -1049,6 +1050,16 @@ export default function Home() {
             </Link>
 
             <a
+              href="https://voxxtrade.github.io/docs/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-obsidian font-mono text-sm font-bold uppercase py-4 px-6 border-2 border-obsidian shadow-brutal transition-all cursor-pointer"
+            >
+              <BookOpen className="w-5 h-5" />
+              <span>EXPLORE DOCS</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
+            <a
               href="https://github.com/voxxtrade/voxtrade-app"
               target="_blank"
               rel="noopener noreferrer"
@@ -1114,6 +1125,18 @@ export default function Home() {
                   >
                     <GithubIcon className="w-3.5 h-3.5" />
                     <span>voxtrade-app</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://voxxtrade.github.io/docs/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-amber-700 flex items-center gap-1.5 transition-colors font-bold text-amber-900"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Documentation Portal</span>
                     <ExternalLink className="w-2.5 h-2.5" />
                   </a>
                 </li>
