@@ -30,7 +30,12 @@ import {
   FileCode,
   Zap,
   Clock,
-  Coins
+  Coins,
+  Brain,
+  Settings,
+  Key,
+  Cpu,
+  X
 } from 'lucide-react';
 import { isConnected, requestAccess, getPublicKey } from '@stellar/freighter-api';
 
@@ -83,6 +88,13 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
   const [isAutoSimulating, setIsAutoSimulating] = useState(false);
   const [simTurnIndex, setSimTurnIndex] = useState(0);
 
+  // Real AI Agent Engine State
+  const [isAgentThinking, setIsAgentThinking] = useState(false);
+  const [userApiKey, setUserApiKey] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [activeEngineModel, setActiveEngineModel] = useState('VoxAgent Core v2 (Dynamic)');
+
   // Logs & Transcripts
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -132,6 +144,62 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     }
   }, [messages]);
 
+  // Load custom API key & provider on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedKey = localStorage.getItem('voxtrade_custom_api_key');
+      const storedProv = localStorage.getItem('voxtrade_llm_provider') as any;
+      if (storedKey) {
+        setUserApiKey(storedKey);
+        setInputApiKey(storedKey);
+      }
+      if (storedProv) {
+        setSelectedProvider(storedProv);
+        setInputProvider(storedProv);
+      }
+      if (storedKey && storedProv === 'gemini') setActiveEngineModel('Google Gemini 1.5');
+      else if (storedKey && storedProv === 'openai') setActiveEngineModel('OpenAI gpt-4o-mini');
+      else if (storedKey && storedProv === 'groq') setActiveEngineModel('Groq Llama-3.1');
+    }
+  }, []);
+
+  const [inputApiKey, setInputApiKey] = useState('');
+  const [inputProvider, setInputProvider] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
+
+  const saveAiSettings = () => {
+    const key = inputApiKey.trim();
+    setUserApiKey(key);
+    setSelectedProvider(inputProvider);
+    if (typeof window !== 'undefined') {
+      if (key) {
+        localStorage.setItem('voxtrade_custom_api_key', key);
+      } else {
+        localStorage.removeItem('voxtrade_custom_api_key');
+      }
+      localStorage.setItem('voxtrade_llm_provider', inputProvider);
+    }
+    if (inputProvider === 'gemini') setActiveEngineModel(key ? 'Google Gemini 1.5' : 'Gemini (Auto)');
+    else if (inputProvider === 'openai') setActiveEngineModel(key ? 'OpenAI gpt-4o-mini' : 'OpenAI (Auto)');
+    else if (inputProvider === 'groq') setActiveEngineModel(key ? 'Groq Llama-3.1' : 'Groq (Auto)');
+    else setActiveEngineModel('VoxAgent Core v2 (Dynamic)');
+    setShowKeyModal(false);
+    log(`AI Brain config updated to ${inputProvider.toUpperCase()}`, 'info');
+  };
+
+  const resetAiSettings = () => {
+    setInputApiKey('');
+    setInputProvider('auto');
+    setUserApiKey('');
+    setSelectedProvider('auto');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('voxtrade_custom_api_key');
+      localStorage.setItem('voxtrade_llm_provider', 'auto');
+    }
+    setActiveEngineModel('VoxAgent Core v2 (Dynamic)');
+    setShowKeyModal(false);
+    log('AI Brain reset to built-in dynamic bargaining core.', 'info');
+  };
+
   // Speech Synthesis helper
   const speakText = (text: string, pitch = 1.0, rate = 1.0) => {
     if (isAudioMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -146,73 +214,77 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     }
   };
 
-  // Pre-configured Autonomous Dialogue Script
-  const autonomousTurns: Array<{
-    sender: string;
-    role: 'buyer_agent' | 'provider_agent';
-    text: string;
-    tag: 'PROPOSAL' | 'COUNTER_OFFER' | 'AGREEMENT' | 'TERMS';
-    pitch: number;
-    rate: number;
-  }> = [
-    {
-      sender: 'VoxAgent-Alpha (Client)',
-      role: 'buyer_agent',
-      text: 'Initiating voice negotiation for 100,000 real-time synthetic speech inference tokens. Target budget: 6.00 USDC.',
-      tag: 'PROPOSAL',
-      pitch: 1.1,
-      rate: 1.05,
-    },
-    {
-      sender: 'ComputeNode-7 (Provider)',
-      role: 'provider_agent',
-      text: 'Greetings Alpha. Standard tier for 100k 48kHz voice tokens is 9.50 USDC with 99.9% uptime SLA and <120ms latency.',
-      tag: 'COUNTER_OFFER',
-      pitch: 0.9,
-      rate: 0.98,
-    },
-    {
-      sender: 'VoxAgent-Alpha (Client)',
-      role: 'buyer_agent',
-      text: 'We can agree to 8.00 USDC if the HTLC timelock is set to 3,600 seconds with streaming SHA-256 preimage verification.',
-      tag: 'TERMS',
-      pitch: 1.1,
-      rate: 1.05,
-    },
-    {
-      sender: 'ComputeNode-7 (Provider)',
-      role: 'provider_agent',
-      text: 'Deal accepted at 8.00 USDC. Timelock 3,600s. Service delivery will commence immediately upon Soroban escrow lock confirmation.',
-      tag: 'AGREEMENT',
-      pitch: 0.9,
-      rate: 0.98,
-    },
-  ];
+  // Advance Autonomous Turn (Real Dynamic AI vs AI Negotiation)
+  const advanceAutonomousTurn = async () => {
+    if (isAgentThinking) return;
 
-  // Advance Autonomous Turn
-  const advanceAutonomousTurn = () => {
-    if (simTurnIndex >= autonomousTurns.length) {
-      setIsAutoSimulating(false);
-      log('Autonomous agent negotiation concluded. Consensus reached!', 'success');
-      generateContractDraft();
-      return;
+    const currentTurn = simTurnIndex;
+    const isBuyerTurn = currentTurn % 2 === 0;
+    const agentRole = isBuyerTurn ? 'buyer' : 'seller';
+    const senderName = isBuyerTurn ? 'VoxAgent-Alpha (Buyer)' : 'ComputeNode-7 (Provider)';
+    const roleType = isBuyerTurn ? ('buyer_agent' as const) : ('provider_agent' as const);
+
+    setIsAgentThinking(true);
+
+    try {
+      const history = messages
+        .filter((m) => m.role === 'buyer_agent' || m.role === 'provider_agent' || m.role === 'human')
+        .map((m) => ({
+          role: m.role === 'buyer_agent' ? ('user' as const) : ('assistant' as const),
+          content: m.text,
+        }));
+
+      const res = await fetch('/api/negotiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: history,
+          mode: 'agent-to-agent',
+          agentRole,
+          marketContext: {
+            round: currentTurn + 1,
+            currentOffer: 6.0 + currentTurn * 0.5,
+          },
+          customApiKey: userApiKey || undefined,
+          provider: selectedProvider,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.model && activeEngineModel !== data.model) {
+        setActiveEngineModel(data.model);
+      }
+
+      const newMsg: ChatMessage = {
+        id: `auto-${Date.now()}-${currentTurn}`,
+        sender: senderName,
+        role: roleType,
+        text: data.reply,
+        timestamp: new Date().toLocaleTimeString(),
+        tag: data.tag || 'TERMS',
+      };
+
+      setMessages((prev) => [...prev, newMsg]);
+      speakText(data.reply, isBuyerTurn ? 1.15 : 0.88, isBuyerTurn ? 1.05 : 0.98);
+      log(`[${senderName}] ${data.reply}`, data.tag === 'AGREEMENT' ? 'success' : 'info');
+
+      setSimTurnIndex((prev) => prev + 1);
+
+      // If agreement reached or 5 turns completed
+      if (data.tag === 'AGREEMENT' || currentTurn >= 4) {
+        setIsAutoSimulating(false);
+        log('Autonomous agent negotiation concluded. Consensus reached!', 'success');
+        if (data.extractedTerms?.amount) {
+          generateContractDraft(data.extractedTerms.amount);
+        } else {
+          generateContractDraft();
+        }
+      }
+    } catch (e) {
+      console.error('Autonomous turn error:', e);
+    } finally {
+      setIsAgentThinking(false);
     }
-
-    const current = autonomousTurns[simTurnIndex];
-    const newMsg: ChatMessage = {
-      id: `auto-${Date.now()}-${simTurnIndex}`,
-      sender: current.sender,
-      role: current.role,
-      text: current.text,
-      timestamp: new Date().toLocaleTimeString(),
-      tag: current.tag,
-    };
-
-    setMessages((prev) => [...prev, newMsg]);
-    speakText(current.text, current.pitch, current.rate);
-    log(`[${current.sender}] ${current.text}`, current.tag === 'AGREEMENT' ? 'success' : 'info');
-
-    setSimTurnIndex((prev) => prev + 1);
   };
 
   const advanceTurnRef = useRef(advanceAutonomousTurn);
@@ -364,8 +436,8 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     log('Call disconnected. Logs recorded.', 'warn');
   };
 
-  // User Voice Input Processor
-  const handleUserVoiceInput = (text: string) => {
+  // User Voice Input Processor (Real Dynamic AI Reasoning)
+  const handleUserVoiceInput = async (text: string) => {
     if (!text) return;
 
     if (callMode === 'human-to-human') {
@@ -395,39 +467,60 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     setMessages((prev) => [...prev, userMsg]);
     log(`[User] ${text}`, 'info');
 
-    // Generate smart agent response
-    setTimeout(() => {
-      let reply = '';
-      let tag: 'PROPOSAL' | 'COUNTER_OFFER' | 'AGREEMENT' | 'TERMS' = 'TERMS';
-      const lower = text.toLowerCase();
+    setIsAgentThinking(true);
 
-      if (lower.includes('price') || lower.includes('cost') || lower.includes('how much')) {
-        reply = "Our base inference stream rate is 0.05 USDC per minute, or 8.50 USDC for a dedicated 100k batch with 99.9% uptime.";
-        tag = 'PROPOSAL';
-      } else if (lower.includes('accept') || lower.includes('deal') || lower.includes('agree')) {
-        reply = "Deal confirmed! I have locked in these terms. You can now click 'Draft Contract from Call' to generate the Soroban escrow parameters.";
-        tag = 'AGREEMENT';
-      } else if (lower.includes('5') || lower.includes('6') || lower.includes('7') || lower.includes('cheap') || lower.includes('discount')) {
-        reply = "I can accept 7.50 USDC if we set the escrow timelock to 1 hour with sub-second preimage validation on Stellar.";
-        tag = 'COUNTER_OFFER';
-      } else {
-        reply = `Understood: "${text}". I have logged this term for our Soroban escrow agreement. Do you agree to settlement in USDC?`;
-        tag = 'TERMS';
+    try {
+      const history = messages
+        .filter((m) => m.role === 'human' || m.role === 'provider_agent')
+        .map((m) => ({
+          role: m.role === 'human' ? ('user' as const) : ('assistant' as const),
+          content: m.text,
+        }));
+      history.push({ role: 'user', content: text });
+
+      const res = await fetch('/api/negotiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: history,
+          mode: 'user-to-agent',
+          agentRole: 'seller',
+          customApiKey: userApiKey || undefined,
+          provider: selectedProvider,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.model && activeEngineModel !== data.model) {
+        setActiveEngineModel(data.model);
       }
 
       const agentMsg: ChatMessage = {
         id: `agent-${Date.now()}`,
-        sender: 'VoxAgent AI (Negotiator)',
+        sender: `VoxAgent AI (${data.model || 'Negotiator'})`,
         role: 'provider_agent',
-        text: reply,
+        text: data.reply,
         timestamp: new Date().toLocaleTimeString(),
-        tag,
+        tag: data.tag || 'TERMS',
       };
 
       setMessages((prev) => [...prev, agentMsg]);
-      speakText(reply, 1.05, 1.0);
-      log(`[VoxAgent AI] ${reply}`, tag === 'AGREEMENT' ? 'success' : 'info');
-    }, 900);
+      speakText(data.reply, 1.05, 1.0);
+      log(`[VoxAgent AI] ${data.reply}`, data.tag === 'AGREEMENT' ? 'success' : 'info');
+
+      if (data.tag === 'AGREEMENT') {
+        if (data.extractedTerms?.amount) {
+          generateContractDraft(data.extractedTerms.amount);
+        } else {
+          generateContractDraft();
+        }
+      }
+    } catch (err: any) {
+      console.error('Agent voice error:', err);
+      log(`Agent reasoning error: ${err?.message || 'Network failure'}`, 'error');
+    } finally {
+      setIsAgentThinking(false);
+    }
   };
 
   // Submit manual text as speech
@@ -439,18 +532,23 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
   };
 
   // AI Contract Drafting from Conversation Logs
-  const generateContractDraft = async () => {
+  const generateContractDraft = async (overrideAmount?: number) => {
     setIsDrafting(true);
     log('AI Contract Engine analyzing conversation transcript...', 'info');
 
-    await new Promise((r) => setTimeout(r, 1200));
+    await new Promise((r) => setTimeout(r, 1000));
 
-    // Derive terms from messages
-    let detectedAmount = 8.5; // default USDC
-    for (const m of messages) {
-      if (m.text.includes('8.00') || m.text.includes('8 USDC')) detectedAmount = 8.0;
-      else if (m.text.includes('7.50') || m.text.includes('7.5 USDC')) detectedAmount = 7.5;
-      else if (m.text.includes('6.00') || m.text.includes('6 USDC')) detectedAmount = 6.0;
+    // Derive terms from messages or override
+    let detectedAmount = overrideAmount || 8.5;
+    if (!overrideAmount) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const text = messages[i].text;
+        const match = text.match(/(\d+(\.\d+)?)\s*(USDC|XLM|dollar|\$)?/i);
+        if (match && parseFloat(match[1]) > 0 && parseFloat(match[1]) <= 1000) {
+          detectedAmount = parseFloat(match[1]);
+          break;
+        }
+      }
     }
 
     const secretPreimage = `voxtrade_preimage_${Math.random().toString(36).substring(2, 12)}`;
@@ -642,7 +740,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
       <div className="bg-white border-2 border-obsidian p-5 sm:p-6 shadow-brutal-xl space-y-5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-obsidian/15 pb-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="bg-amber-500 text-obsidian px-2.5 py-0.5 font-mono text-xs font-bold uppercase">
                 COMMUNICATION MATRIX
               </span>
@@ -650,6 +748,20 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
                 <Radio className={`w-3.5 h-3.5 ${callActive ? 'text-rose-600 animate-ping' : 'text-zinc-400'}`} />
                 {callActive ? 'CALL IN PROGRESS' : 'READY TO CONNECT'}
               </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setInputApiKey(userApiKey);
+                  setInputProvider(selectedProvider);
+                  setShowKeyModal(true);
+                }}
+                className="flex items-center gap-1.5 bg-obsidian hover:bg-obsidian/85 text-amber-300 border border-obsidian px-2.5 py-0.5 font-mono text-[11px] font-bold uppercase cursor-pointer transition-all shadow-brutal-xs"
+                title="Configure Real AI Model / Custom API Key"
+              >
+                <Brain className="w-3.5 h-3.5 text-amber-400" />
+                <span>AI BRAIN: {activeEngineModel}</span>
+                <Settings className="w-3 h-3 text-alabaster/60 ml-0.5" />
+              </button>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-obsidian">
               Voice Negotiation Room
@@ -871,14 +983,15 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
         {callActive && callMode === 'agent-to-agent' && (
           <div className="flex items-center justify-between pt-1 border-t border-obsidian-subtle font-mono text-xs">
             <span className="text-amber-300 font-semibold">
-              AUTONOMOUS DIALOGUE: TURN {simTurnIndex} OF {autonomousTurns.length}
+              AUTONOMOUS DIALOGUE: ROUND {Math.floor(simTurnIndex / 2) + 1} | TURN {simTurnIndex + 1}
             </span>
             <button
               type="button"
               onClick={advanceAutonomousTurn}
-              className="bg-amber-500 hover:bg-amber-400 text-obsidian px-3 py-1 font-bold uppercase border border-obsidian cursor-pointer active:scale-95"
+              disabled={isAgentThinking || simTurnIndex >= 6}
+              className="bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-obsidian px-3 py-1 font-bold uppercase border border-obsidian cursor-pointer active:scale-95 transition-all"
             >
-              NEXT TURN &rarr;
+              {isAgentThinking ? 'AGENT THINKING...' : 'NEXT TURN →'}
             </button>
           </div>
         )}
@@ -967,6 +1080,15 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
                 </p>
               </div>
             ))}
+
+            {isAgentThinking && (
+              <div className="p-3 border-2 border-dashed border-amber-500 bg-amber-50 text-obsidian shadow-brutal-sm mr-4 animate-pulse flex items-center gap-2 font-mono text-xs">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                <span className="font-bold text-amber-950">
+                  Agent reasoning in progress ({activeEngineModel})...
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Bottom Interactive Voice / Text Input Box */}
@@ -977,19 +1099,21 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
                 value={userSpeechInput}
                 onChange={(e) => setUserSpeechInput(e.target.value)}
                 placeholder={
-                  callActive
-                    ? 'Speak into microphone or type voice phrase here...'
-                    : 'Click "Start Live Call" above to talk...'
+                  !callActive
+                    ? 'Click "Start Live Call" above to talk...'
+                    : isAgentThinking
+                    ? 'Agent is reasoning... please wait'
+                    : 'Speak into microphone or type voice phrase here...'
                 }
-                disabled={!callActive}
-                className="flex-1 bg-alabaster border-2 border-obsidian p-2.5 font-mono text-xs font-bold text-obsidian placeholder:text-obsidian/40 focus:outline-none focus:bg-white"
+                disabled={!callActive || isAgentThinking}
+                className="flex-1 bg-alabaster border-2 border-obsidian p-2.5 font-mono text-xs font-bold text-obsidian placeholder:text-obsidian/40 focus:outline-none focus:bg-white disabled:opacity-60"
               />
               <button
                 type="submit"
-                disabled={!callActive || !userSpeechInput.trim()}
+                disabled={!callActive || !userSpeechInput.trim() || isAgentThinking}
                 className="bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-200 disabled:text-zinc-500 text-obsidian font-mono text-xs font-bold uppercase px-4 py-2.5 border-2 border-obsidian shadow-brutal-sm cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
               >
-                SPEAK
+                {isAgentThinking ? 'THINKING...' : 'SPEAK'}
               </button>
             </form>
 
@@ -1050,7 +1174,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
 
                 <button
                   type="button"
-                  onClick={generateContractDraft}
+                  onClick={() => generateContractDraft()}
                   disabled={isDrafting}
                   className="bg-amber-500 hover:bg-amber-600 text-obsidian hover:text-white border-2 border-obsidian shadow-brutal px-6 py-3 font-mono text-xs font-bold uppercase flex items-center gap-2 mx-auto cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
                 >
@@ -1212,7 +1336,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
 
               <button
                 type="button"
-                onClick={generateContractDraft}
+                onClick={() => generateContractDraft()}
                 disabled={isDrafting}
                 className="bg-white hover:bg-amber-100 text-obsidian border-2 border-obsidian shadow-brutal-sm px-4 py-3.5 font-mono text-xs font-bold uppercase flex items-center gap-1.5 cursor-pointer"
               >
@@ -1223,6 +1347,139 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
           </div>
         </div>
       </div>
+
+      {/* AI Brain / LLM Provider Configuration Modal */}
+      <AnimatePresence>
+        {showKeyModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-obsidian/70 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white border-2 border-obsidian shadow-brutal-xl w-full max-w-lg overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="bg-obsidian text-alabaster p-4 border-b-2 border-obsidian flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-amber-400" />
+                  <span className="font-mono text-sm font-bold uppercase text-amber-300">
+                    AI BRAIN CONFIGURATION // LLM ENGINE
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowKeyModal(false)}
+                  className="text-alabaster/70 hover:text-white p-1 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-5">
+                <div>
+                  <h4 className="font-bold text-obsidian text-base uppercase mb-1">
+                    Select AI Reasoning Provider
+                  </h4>
+                  <p className="text-xs text-obsidian/70">
+                    VoxTrade agents can run either on our built-in dynamic bargaining core or connect directly to frontier LLMs via your own API key.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="block text-xs font-mono font-bold uppercase text-obsidian">
+                    Provider Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'auto', name: 'Built-in Core', desc: 'Dynamic bargaining algorithm' },
+                      { id: 'gemini', name: 'Google Gemini', desc: 'Gemini 1.5 Flash' },
+                      { id: 'groq', name: 'Groq (Llama)', desc: 'Llama 3.1 8B Instant' },
+                      { id: 'openai', name: 'OpenAI', desc: 'GPT-4o-mini' },
+                    ].map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setInputProvider(p.id as any)}
+                        className={`p-3 border-2 text-left cursor-pointer transition-all ${
+                          inputProvider === p.id
+                            ? 'bg-amber-400 border-obsidian text-obsidian font-bold shadow-brutal-xs'
+                            : 'bg-alabaster/60 border-obsidian/30 text-obsidian/80 hover:border-obsidian'
+                        }`}
+                      >
+                        <div className="font-mono text-xs uppercase">{p.name}</div>
+                        <div className="text-[10px] opacity-75">{p.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {inputProvider !== 'auto' && (
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between text-xs font-mono font-bold uppercase text-obsidian">
+                      <span>API Key ({inputProvider.toUpperCase()})</span>
+                      <span className="text-[10px] text-obsidian/60 font-normal">Stored locally in browser</span>
+                    </label>
+                    <div className="relative">
+                      <Key className="w-4 h-4 text-obsidian/40 absolute left-3 top-3" />
+                      <input
+                        type="password"
+                        value={inputApiKey}
+                        onChange={(e) => setInputApiKey(e.target.value)}
+                        placeholder={
+                          inputProvider === 'gemini'
+                            ? 'AIzaSy...'
+                            : inputProvider === 'groq'
+                            ? 'gsk_...'
+                            : 'sk-...'
+                        }
+                        className="w-full bg-alabaster border-2 border-obsidian pl-9 pr-3 py-2.5 font-mono text-xs font-bold text-obsidian placeholder:text-obsidian/40 focus:outline-none focus:bg-white"
+                      />
+                    </div>
+                    <p className="text-[11px] text-obsidian/70">
+                      If left blank and server environment variables (<code className="bg-zinc-100 px-1 font-mono">GEMINI_API_KEY</code>, etc.) are configured, those will be utilized automatically.
+                    </p>
+                  </div>
+                )}
+
+                <div className="bg-amber-50 border border-amber-300 p-3 text-[11px] text-amber-950 flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Privacy & Security:</strong> Your custom key is stored strictly inside your browser&apos;s <code className="font-mono">localStorage</code> and transmitted only to run your voice negotiations. It is never logged or written to any server database.
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="bg-alabaster p-4 border-t-2 border-obsidian flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={resetAiSettings}
+                  className="text-xs font-mono font-bold uppercase text-obsidian/70 hover:text-rose-600 cursor-pointer"
+                >
+                  Reset to Default
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyModal(false)}
+                    className="border-2 border-obsidian bg-white hover:bg-zinc-100 px-4 py-2 font-mono text-xs font-bold uppercase cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveAiSettings}
+                    className="border-2 border-obsidian bg-amber-500 hover:bg-amber-600 text-obsidian px-5 py-2 font-mono text-xs font-bold uppercase shadow-brutal-sm cursor-pointer active:translate-x-0.5 active:translate-y-0.5"
+                  >
+                    Save & Activate
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
