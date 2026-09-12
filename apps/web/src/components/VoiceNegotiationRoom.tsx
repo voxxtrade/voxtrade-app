@@ -91,7 +91,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
   // Real AI Agent Engine State
   const [isAgentThinking, setIsAgentThinking] = useState(false);
   const [userApiKey, setUserApiKey] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
+  const [selectedProvider, setSelectedProvider] = useState<'auto' | 'gemini' | 'openai' | 'groq' | 'anthropic'>('auto');
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [activeEngineModel, setActiveEngineModel] = useState('VoxAgent Core v2 (Dynamic)');
 
@@ -160,11 +160,55 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
       if (storedKey && storedProv === 'gemini') setActiveEngineModel('Google Gemini 1.5');
       else if (storedKey && storedProv === 'openai') setActiveEngineModel('OpenAI gpt-4o-mini');
       else if (storedKey && storedProv === 'groq') setActiveEngineModel('Groq Llama-3.1');
+      else if (storedKey && storedProv === 'anthropic') setActiveEngineModel('Claude 3.5 Haiku');
     }
   }, []);
 
   const [inputApiKey, setInputApiKey] = useState('');
-  const [inputProvider, setInputProvider] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
+  const [inputProvider, setInputProvider] = useState<'auto' | 'gemini' | 'openai' | 'groq' | 'anthropic'>('auto');
+  const [isTestingKey, setIsTestingKey] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleApiKeyChange = (val: string) => {
+    setInputApiKey(val);
+    setTestResult(null);
+    const trimmed = val.trim();
+    if (trimmed.startsWith('AIza')) setInputProvider('gemini');
+    else if (trimmed.startsWith('gsk_')) setInputProvider('groq');
+    else if (trimmed.startsWith('sk-ant-')) setInputProvider('anthropic');
+    else if (trimmed.startsWith('sk-')) setInputProvider('openai');
+  };
+
+  const runKeyTest = async () => {
+    const key = inputApiKey.trim();
+    if (!key) {
+      setTestResult({ ok: false, message: 'Please enter an API key to test.' });
+      return;
+    }
+    setIsTestingKey(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/negotiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customApiKey: key,
+          provider: inputProvider,
+          testConnection: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTestResult({ ok: true, message: `Connected successfully! Active model: ${data.model}` });
+      } else {
+        setTestResult({ ok: false, message: data.error || 'Connection rejected by provider' });
+      }
+    } catch (err: any) {
+      setTestResult({ ok: false, message: err?.message || 'Network exception connecting to API' });
+    } finally {
+      setIsTestingKey(false);
+    }
+  };
 
   const saveAiSettings = () => {
     const key = inputApiKey.trim();
@@ -181,6 +225,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     if (inputProvider === 'gemini') setActiveEngineModel(key ? 'Google Gemini 1.5' : 'Gemini (Auto)');
     else if (inputProvider === 'openai') setActiveEngineModel(key ? 'OpenAI gpt-4o-mini' : 'OpenAI (Auto)');
     else if (inputProvider === 'groq') setActiveEngineModel(key ? 'Groq Llama-3.1' : 'Groq (Auto)');
+    else if (inputProvider === 'anthropic') setActiveEngineModel(key ? 'Claude 3.5 Haiku' : 'Anthropic (Auto)');
     else setActiveEngineModel('VoxAgent Core v2 (Dynamic)');
     setShowKeyModal(false);
     log(`AI Brain config updated to ${inputProvider.toUpperCase()}`, 'info');
@@ -191,6 +236,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     setInputProvider('auto');
     setUserApiKey('');
     setSelectedProvider('auto');
+    setTestResult(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('voxtrade_custom_api_key');
       localStorage.setItem('voxtrade_llm_provider', 'auto');
@@ -506,7 +552,11 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
 
       setMessages((prev) => [...prev, agentMsg]);
       speakText(data.reply, 1.05, 1.0);
-      log(`[VoxAgent AI] ${data.reply}`, data.tag === 'AGREEMENT' ? 'success' : 'info');
+      if (data.error) {
+        log(`[AI Engine Error] ${data.reply}`, 'error');
+      } else {
+        log(`[VoxAgent AI] ${data.reply}`, data.tag === 'AGREEMENT' ? 'success' : 'info');
+      }
 
       if (data.tag === 'AGREEMENT') {
         if (data.extractedTerms?.amount) {
@@ -1390,25 +1440,29 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
                   <label className="block text-xs font-mono font-bold uppercase text-obsidian">
                     Provider Mode
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {[
-                      { id: 'auto', name: 'Built-in Core', desc: 'Dynamic bargaining algorithm' },
+                      { id: 'auto', name: 'Built-in Core', desc: 'Dynamic bargaining engine' },
                       { id: 'gemini', name: 'Google Gemini', desc: 'Gemini 1.5 Flash' },
                       { id: 'groq', name: 'Groq (Llama)', desc: 'Llama 3.1 8B Instant' },
                       { id: 'openai', name: 'OpenAI', desc: 'GPT-4o-mini' },
+                      { id: 'anthropic', name: 'Anthropic', desc: 'Claude 3.5 Haiku' },
                     ].map((p) => (
                       <button
                         key={p.id}
                         type="button"
-                        onClick={() => setInputProvider(p.id as any)}
-                        className={`p-3 border-2 text-left cursor-pointer transition-all ${
+                        onClick={() => {
+                          setInputProvider(p.id as any);
+                          setTestResult(null);
+                        }}
+                        className={`p-2.5 border-2 text-left cursor-pointer transition-all ${
                           inputProvider === p.id
                             ? 'bg-amber-400 border-obsidian text-obsidian font-bold shadow-brutal-xs'
                             : 'bg-alabaster/60 border-obsidian/30 text-obsidian/80 hover:border-obsidian'
                         }`}
                       >
-                        <div className="font-mono text-xs uppercase">{p.name}</div>
-                        <div className="text-[10px] opacity-75">{p.desc}</div>
+                        <div className="font-mono text-xs uppercase truncate">{p.name}</div>
+                        <div className="text-[10px] opacity-75 truncate">{p.desc}</div>
                       </button>
                     ))}
                   </div>
@@ -1418,24 +1472,54 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
                   <div className="space-y-2">
                     <label className="flex items-center justify-between text-xs font-mono font-bold uppercase text-obsidian">
                       <span>API Key ({inputProvider.toUpperCase()})</span>
-                      <span className="text-[10px] text-obsidian/60 font-normal">Stored locally in browser</span>
+                      <span className="text-[10px] text-obsidian/60 font-normal">Auto-detects format</span>
                     </label>
-                    <div className="relative">
-                      <Key className="w-4 h-4 text-obsidian/40 absolute left-3 top-3" />
-                      <input
-                        type="password"
-                        value={inputApiKey}
-                        onChange={(e) => setInputApiKey(e.target.value)}
-                        placeholder={
-                          inputProvider === 'gemini'
-                            ? 'AIzaSy...'
-                            : inputProvider === 'groq'
-                            ? 'gsk_...'
-                            : 'sk-...'
-                        }
-                        className="w-full bg-alabaster border-2 border-obsidian pl-9 pr-3 py-2.5 font-mono text-xs font-bold text-obsidian placeholder:text-obsidian/40 focus:outline-none focus:bg-white"
-                      />
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Key className="w-4 h-4 text-obsidian/40 absolute left-3 top-3" />
+                        <input
+                          type="password"
+                          value={inputApiKey}
+                          onChange={(e) => handleApiKeyChange(e.target.value)}
+                          placeholder={
+                            inputProvider === 'gemini'
+                              ? 'AIzaSy...'
+                              : inputProvider === 'groq'
+                              ? 'gsk_...'
+                              : inputProvider === 'anthropic'
+                              ? 'sk-ant-...'
+                              : 'sk-...'
+                          }
+                          className="w-full bg-alabaster border-2 border-obsidian pl-9 pr-3 py-2.5 font-mono text-xs font-bold text-obsidian placeholder:text-obsidian/40 focus:outline-none focus:bg-white"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={runKeyTest}
+                        disabled={isTestingKey || !inputApiKey.trim()}
+                        className="bg-obsidian hover:bg-obsidian/85 disabled:bg-zinc-300 text-amber-300 disabled:text-zinc-500 border-2 border-obsidian px-3 py-2 font-mono text-xs font-bold uppercase shrink-0 cursor-pointer active:scale-95 transition-all"
+                      >
+                        {isTestingKey ? 'TESTING...' : 'TEST KEY'}
+                      </button>
                     </div>
+
+                    {testResult && (
+                      <div
+                        className={`p-2.5 border-2 text-xs font-mono flex items-start gap-2 ${
+                          testResult.ok
+                            ? 'bg-jade-50 border-jade-600 text-jade-950'
+                            : 'bg-rose-50 border-rose-600 text-rose-950'
+                        }`}
+                      >
+                        {testResult.ok ? (
+                          <CheckCircle2 className="w-4 h-4 text-jade-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <X className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        )}
+                        <span className="break-all">{testResult.message}</span>
+                      </div>
+                    )}
+
                     <p className="text-[11px] text-obsidian/70">
                       If left blank and server environment variables (<code className="bg-zinc-100 px-1 font-mono">GEMINI_API_KEY</code>, etc.) are configured, those will be utilized automatically.
                     </p>

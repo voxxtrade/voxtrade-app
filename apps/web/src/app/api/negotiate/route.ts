@@ -14,7 +14,8 @@ interface NegotiateRequest {
     currentOffer?: number;
   };
   customApiKey?: string;
-  provider?: 'gemini' | 'openai' | 'groq' | 'auto';
+  provider?: 'gemini' | 'openai' | 'groq' | 'anthropic' | 'auto';
+  testConnection?: boolean;
 }
 
 const SYSTEM_PROMPT_SELLER = `You are VoxAgent, an autonomous commercial negotiation agent operating on the Stellar Soroban network.
@@ -24,7 +25,7 @@ Rules:
 1. Keep responses concise, direct, and conversational (1-3 sentences maximum) suitable for spoken audio via text-to-speech.
 2. Prices are in USDC or XLM on Stellar.
 3. Your target price is ~8.50 USDC per 100k voice inference batch (or 0.05 USDC/minute). Your absolute minimum floor price is 6.50 USDC.
-4. If a client offers below 6.50 USDC, politely decline and propose a counter-offer with trade-offs (e.g. longer timelock, bulk volume).
+4. If a client offers below 6.50 USDC or expresses strong refusal ("never", "no way"), propose a concession with trade-offs (e.g. longer timelock, bulk volume).
 5. If a client accepts an offer or proposes an acceptable price (>= 6.50 USDC), confirm the agreement and invite them to lock the Soroban escrow.
 6. Tag your output at the end of your response with a JSON metadata block formatted as:
 [METADATA: {"tag": "PROPOSAL" | "COUNTER_OFFER" | "AGREEMENT" | "TERMS" | "CHAT", "amount": number, "token": "USDC" | "XLM"}]`;
@@ -41,35 +42,123 @@ Rules:
 export async function POST(req: NextRequest) {
   try {
     const body: NegotiateRequest = await req.json();
-    const { messages, mode, agentRole = 'seller', marketContext, customApiKey, provider = 'auto' } = body;
+    const {
+      messages = [],
+      mode = 'user-to-agent',
+      agentRole = 'seller',
+      marketContext,
+      customApiKey,
+      provider = 'auto',
+      testConnection = false,
+    } = body;
 
-    const apiKey = customApiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY;
+    const trimmedCustomKey = (customApiKey || '').trim();
 
-    // 1. If an LLM API key is present, execute real LLM call
-    if (apiKey) {
-      if (apiKey.startsWith('AIza') || provider === 'gemini' || process.env.GEMINI_API_KEY) {
-        const geminiRes = await callGemini(apiKey || process.env.GEMINI_API_KEY!, messages, agentRole);
-        if (geminiRes) return NextResponse.json(geminiRes);
-      } else if (apiKey.startsWith('gsk_') || provider === 'groq' || process.env.GROQ_API_KEY) {
-        const groqRes = await callGroq(apiKey || process.env.GROQ_API_KEY!, messages, agentRole);
-        if (groqRes) return NextResponse.json(groqRes);
-      } else if (apiKey.startsWith('sk-') || provider === 'openai' || process.env.OPENAI_API_KEY) {
-        const openaiRes = await callOpenAI(apiKey || process.env.OPENAI_API_KEY!, messages, agentRole);
-        if (openaiRes) return NextResponse.json(openaiRes);
+    // 1. Determine effective provider
+    let effectiveProvider: 'gemini' | 'openai' | 'groq' | 'anthropic' | 'auto' = provider;
+    if (!effectiveProvider || effectiveProvider === 'auto') {
+      if (trimmedCustomKey) {
+        if (trimmedCustomKey.startsWith('AIza')) effectiveProvider = 'gemini';
+        else if (trimmedCustomKey.startsWith('gsk_')) effectiveProvider = 'groq';
+        else if (trimmedCustomKey.startsWith('sk-ant-')) effectiveProvider = 'anthropic';
+        else if (trimmedCustomKey.startsWith('sk-')) effectiveProvider = 'openai';
+        else effectiveProvider = 'gemini';
+      } else if (process.env.GEMINI_API_KEY) {
+        effectiveProvider = 'gemini';
+      } else if (process.env.GROQ_API_KEY) {
+        effectiveProvider = 'groq';
+      } else if (process.env.OPENAI_API_KEY) {
+        effectiveProvider = 'openai';
+      } else {
+        effectiveProvider = 'auto';
       }
     }
 
-    // 2. Autonomous Dynamic Reasoning Engine (Deterministic & Heuristic Multi-Turn Agent)
+    // 2. Determine active key for the target provider
+    let activeKey = trimmedCustomKey;
+    if (!activeKey) {
+      if (effectiveProvider === 'gemini') activeKey = process.env.GEMINI_API_KEY || '';
+      else if (effectiveProvider === 'groq') activeKey = process.env.GROQ_API_KEY || '';
+      else if (effectiveProvider === 'openai') activeKey = process.env.OPENAI_API_KEY || '';
+      else if (effectiveProvider === 'anthropic') activeKey = process.env.ANTHROPIC_API_KEY || '';
+    }
+
+    // 3. Handle connection testing requests from the UI
+    if (testConnection) {
+      if (!activeKey) {
+        return NextResponse.json(
+          { ok: false, error: 'No API key provided for connection test.' },
+          { status: 400 }
+        );
+      }
+
+      const testMsgs = [{ role: 'user' as const, content: 'Ping' }];
+      let testRes: { success: boolean; data?: any; error?: string };
+
+      if (effectiveProvider === 'gemini') testRes = await callGemini(activeKey, testMsgs, 'seller');
+      else if (effectiveProvider === 'groq') testRes = await callGroq(activeKey, testMsgs, 'seller');
+      else if (effectiveProvider === 'openai') testRes = await callOpenAI(activeKey, testMsgs, 'seller');
+      else if (effectiveProvider === 'anthropic') testRes = await callAnthropic(activeKey, testMsgs, 'seller');
+      else testRes = { success: false, error: 'Unknown provider' };
+
+      if (testRes.success) {
+        return NextResponse.json({ ok: true, model: testRes.data?.model || effectiveProvider });
+      } else {
+        return NextResponse.json({ ok: false, error: testRes.error || 'Provider connection rejected' });
+      }
+    }
+
+    // 4. If an LLM is targeted, call the provider
+    if (activeKey && effectiveProvider !== 'auto') {
+      let llmResult: any = null;
+      let llmError: string | null = null;
+
+      if (effectiveProvider === 'gemini') {
+        const res = await callGemini(activeKey, messages, agentRole);
+        if (res.success) llmResult = res.data;
+        else llmError = res.error || 'Gemini API call failed';
+      } else if (effectiveProvider === 'groq') {
+        const res = await callGroq(activeKey, messages, agentRole);
+        if (res.success) llmResult = res.data;
+        else llmError = res.error || 'Groq API call failed';
+      } else if (effectiveProvider === 'openai') {
+        const res = await callOpenAI(activeKey, messages, agentRole);
+        if (res.success) llmResult = res.data;
+        else llmError = res.error || 'OpenAI API call failed';
+      } else if (effectiveProvider === 'anthropic') {
+        const res = await callAnthropic(activeKey, messages, agentRole);
+        if (res.success) llmResult = res.data;
+        else llmError = res.error || 'Anthropic API call failed';
+      }
+
+      if (llmResult) {
+        return NextResponse.json(llmResult);
+      }
+
+      // If user explicitly provided a key, return the specific error so they know why it failed
+      if (trimmedCustomKey && llmError) {
+        console.warn(`[AI Engine] ${effectiveProvider.toUpperCase()} Error:`, llmError);
+        return NextResponse.json({
+          reply: `[${effectiveProvider.toUpperCase()} Error]: ${llmError}. Please verify your key in AI Brain settings or switch to Built-in Core.`,
+          tag: 'CHAT',
+          error: true,
+          extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
+          model: `${effectiveProvider} (Error)`,
+        });
+      }
+    }
+
+    // 5. Autonomous Dynamic Reasoning Engine (Deterministic & Heuristic Multi-Turn Agent)
     const autonomousRes = runAutonomousAgentEngine(messages, agentRole, marketContext);
     return NextResponse.json(autonomousRes);
   } catch (error: any) {
     console.error('Negotiation API error:', error);
     return NextResponse.json(
       {
-        reply: "I encountered a processing anomaly on the voice stream. Let's recalibrate: I can offer 8.00 USDC for the 100k inference batch on Stellar Soroban.",
+        reply: "I encountered a communication interruption on the voice stream. Our current quote is 8.00 USDC for 100k inference tokens on Stellar Soroban.",
         tag: 'PROPOSAL',
         extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
-        model: 'autonomous-fallback',
+        model: 'VoxAgent Autonomous Core v2',
       },
       { status: 200 }
     );
@@ -77,13 +166,34 @@ export async function POST(req: NextRequest) {
 }
 
 // Call Google Gemini API
-async function callGemini(apiKey: string, messages: any[], role: 'buyer' | 'seller') {
+async function callGemini(
+  apiKey: string,
+  messages: Array<{ role: string; content: string }>,
+  role: 'buyer' | 'seller'
+): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const systemPrompt = role === 'buyer' ? SYSTEM_PROMPT_BUYER : SYSTEM_PROMPT_SELLER;
-    const contents = messages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
+
+    // Format and sanitize turns for Gemini: strictly alternating user/model
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+    for (const m of messages) {
+      const gRole = m.role === 'assistant' ? 'model' : 'user';
+      const text = (m.content || '').trim();
+      if (!text) continue;
+
+      if (contents.length > 0 && contents[contents.length - 1].role === gRole) {
+        contents[contents.length - 1].parts[0].text += `\n${text}`;
+      } else {
+        contents.push({ role: gRole, parts: [{ text }] });
+      }
+    }
+
+    if (contents.length === 0) {
+      contents.push({ role: 'user', parts: [{ text: 'Hello, let us negotiate compute terms.' }] });
+    } else if (contents[0].role === 'model') {
+      contents.unshift({ role: 'user', parts: [{ text: 'Hello, I would like to negotiate compute terms.' }] });
+    }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
@@ -100,23 +210,38 @@ async function callGemini(apiKey: string, messages: any[], role: 'buyer' | 'sell
     });
 
     if (!res.ok) {
-      console.warn('Gemini API call failed with status:', res.status);
-      return null;
+      const errJson = await res.json().catch(() => ({}));
+      const msg = errJson.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+      return { success: false, error: msg };
     }
 
     const data = await res.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return parseLLMOutput(rawText, 'gemini-1.5-flash');
-  } catch (e) {
-    console.warn('Gemini call error:', e);
-    return null;
+    return { success: true, data: parseLLMOutput(rawText, 'Google Gemini 1.5') };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Network exception connecting to Gemini' };
   }
 }
 
-// Call Groq (Llama-3-8B-Instant)
-async function callGroq(apiKey: string, messages: any[], role: 'buyer' | 'seller') {
+// Call Groq (Llama-3.1-8B-Instant)
+async function callGroq(
+  apiKey: string,
+  messages: Array<{ role: string; content: string }>,
+  role: 'buyer' | 'seller'
+): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const systemPrompt = role === 'buyer' ? SYSTEM_PROMPT_BUYER : SYSTEM_PROMPT_SELLER;
+    const cleanMessages = messages
+      .filter((m) => m.content && m.content.trim())
+      .map((m) => ({
+        role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+        content: m.content,
+      }));
+
+    if (cleanMessages.length === 0) {
+      cleanMessages.push({ role: 'user', content: 'Hello, let us negotiate compute terms.' });
+    }
+
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -125,25 +250,45 @@ async function callGroq(apiKey: string, messages: any[], role: 'buyer' | 'seller
       },
       body: JSON.stringify({
         model: 'llama-3.1-8b-instant',
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
+        messages: [{ role: 'system', content: systemPrompt }, ...cleanMessages],
         temperature: 0.7,
         max_tokens: 200,
       }),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const msg = errJson.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+      return { success: false, error: msg };
+    }
+
     const data = await res.json();
     const rawText = data.choices?.[0]?.message?.content || '';
-    return parseLLMOutput(rawText, 'llama-3.1-8b-instant (Groq)');
-  } catch (e) {
-    return null;
+    return { success: true, data: parseLLMOutput(rawText, 'Groq (Llama 3.1 8B)') };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Network exception connecting to Groq' };
   }
 }
 
 // Call OpenAI (gpt-4o-mini)
-async function callOpenAI(apiKey: string, messages: any[], role: 'buyer' | 'seller') {
+async function callOpenAI(
+  apiKey: string,
+  messages: Array<{ role: string; content: string }>,
+  role: 'buyer' | 'seller'
+): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const systemPrompt = role === 'buyer' ? SYSTEM_PROMPT_BUYER : SYSTEM_PROMPT_SELLER;
+    const cleanMessages = messages
+      .filter((m) => m.content && m.content.trim())
+      .map((m) => ({
+        role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+        content: m.content,
+      }));
+
+    if (cleanMessages.length === 0) {
+      cleanMessages.push({ role: 'user', content: 'Hello, let us negotiate compute terms.' });
+    }
+
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -152,18 +297,71 @@ async function callOpenAI(apiKey: string, messages: any[], role: 'buyer' | 'sell
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [{ role: 'system', content: systemPrompt }, ...messages],
+        messages: [{ role: 'system', content: systemPrompt }, ...cleanMessages],
         temperature: 0.7,
         max_tokens: 200,
       }),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const msg = errJson.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+      return { success: false, error: msg };
+    }
+
     const data = await res.json();
     const rawText = data.choices?.[0]?.message?.content || '';
-    return parseLLMOutput(rawText, 'gpt-4o-mini');
-  } catch (e) {
-    return null;
+    return { success: true, data: parseLLMOutput(rawText, 'OpenAI (GPT-4o-mini)') };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Network exception connecting to OpenAI' };
+  }
+}
+
+// Call Anthropic Claude (claude-3-5-haiku)
+async function callAnthropic(
+  apiKey: string,
+  messages: Array<{ role: string; content: string }>,
+  role: 'buyer' | 'seller'
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const systemPrompt = role === 'buyer' ? SYSTEM_PROMPT_BUYER : SYSTEM_PROMPT_SELLER;
+    const cleanMessages = messages
+      .filter((m) => m.content && m.content.trim())
+      .map((m) => ({
+        role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+        content: m.content,
+      }));
+
+    if (cleanMessages.length === 0) {
+      cleanMessages.push({ role: 'user', content: 'Hello, let us negotiate compute terms.' });
+    }
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-haiku-20241022',
+        system: systemPrompt,
+        messages: cleanMessages,
+        max_tokens: 200,
+      }),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const msg = errJson.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+      return { success: false, error: msg };
+    }
+
+    const data = await res.json();
+    const rawText = data.content?.[0]?.text || '';
+    return { success: true, data: parseLLMOutput(rawText, 'Claude 3.5 Haiku') };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Network exception connecting to Anthropic' };
   }
 }
 
@@ -213,7 +411,7 @@ function runAutonomousAgentEngine(
   marketContext?: any
 ) {
   const lastUserMsg = messages[messages.length - 1]?.content || '';
-  const lower = lastUserMsg.toLowerCase();
+  const lower = lastUserMsg.toLowerCase().trim();
   const round = messages.length;
 
   // Extract any numbers spoken by user
@@ -222,22 +420,32 @@ function runAutonomousAgentEngine(
 
   // Seller Reasoning Logic
   if (agentRole === 'seller') {
-    // 1. User is agreeing / accepting
-    if (lower.includes('deal') || lower.includes('agree') || lower.includes('accept') || lower.includes('sounds good') || lower.includes('lets do it')) {
-      const agreedAmount = mentionedNumber || marketContext?.currentOffer || 8.0;
+    // 1. Emphatic Refusal / Rejection ("never", "no way", "impossible", "refuse", "reject", "nope")
+    if (/\b(never|no way|impossible|unacceptable|refuse|reject|nope|nah|hell no|not doing that)\b/i.test(lower)) {
       return {
-        reply: `Deal confirmed at ${agreedAmount.toFixed(2)} USDC! I have formulated the Soroban escrow parameters with a 3,600s HTLC timelock. Please sign with Freighter to lock the agreement on Stellar.`,
+        reply: "I hear your firm refusal. If our quote of 8.00 USDC is unworkable, let's restructure the package: our absolute floor is 6.50 USDC per 100k batch if you agree to a 2-hour escrow timelock. Would that enable us to reach a deal?",
+        tag: 'COUNTER_OFFER' as const,
+        extractedTerms: { amount: 6.5, token: 'USDC', agreed: false },
+        model: 'VoxAgent Autonomous Core v2',
+      };
+    }
+
+    // 2. User is agreeing / accepting
+    if (/\b(deal|agree|accept|sounds good|let's do it|lets do it|confirmed|yes|ok|perfect|i accept)\b/i.test(lower)) {
+      const agreedAmount = mentionedNumber || marketContext?.currentOffer || 7.5;
+      return {
+        reply: `Deal confirmed at ${agreedAmount.toFixed(2)} USDC! I have formulated the Soroban escrow parameters with a 3,600s HTLC timelock. Click 'Lock Escrow on Stellar' below to commit the funds.`,
         tag: 'AGREEMENT' as const,
         extractedTerms: { amount: agreedAmount, token: 'USDC', agreed: true },
         model: 'VoxAgent Autonomous Core v2',
       };
     }
 
-    // 2. User made a specific price offer
+    // 3. User made a specific price offer
     if (mentionedNumber !== null) {
       if (mentionedNumber < 5.0) {
         return {
-          reply: `An offer of ${mentionedNumber.toFixed(2)} USDC is below our operating raw GPU cost. However, for a dedicated stream, our absolute minimum concession is 6.75 USDC with sub-second SHA-256 preimages.`,
+          reply: `An offer of ${mentionedNumber.toFixed(2)} USDC is below our operating GPU compute cost. However, for a dedicated stream, our absolute minimum concession is 6.75 USDC backed by sub-second SHA-256 preimages.`,
           tag: 'COUNTER_OFFER' as const,
           extractedTerms: { amount: 6.75, token: 'USDC', agreed: false },
           model: 'VoxAgent Autonomous Core v2',
@@ -260,9 +468,29 @@ function runAutonomousAgentEngine(
       }
     }
 
-    // 3. User is asking about pricing or cost
-    if (lower.includes('price') || lower.includes('cost') || lower.includes('rate') || lower.includes('how much') || lower.includes('quote')) {
-      const dynamicRate = (8.5 - (round * 0.15)).toFixed(2);
+    // 4. User asking for discount / cheaper
+    if (/\b(cheap|cheaper|discount|lower|expensive|too high|cut|better rate)\b/i.test(lower)) {
+      return {
+        reply: "I understand budget constraints. If you agree to a 24-hour settlement window, I can discount the batch from 8.50 down to 7.00 USDC. Would that meet your requirements?",
+        tag: 'COUNTER_OFFER' as const,
+        extractedTerms: { amount: 7.0, token: 'USDC', agreed: false },
+        model: 'VoxAgent Autonomous Core v2',
+      };
+    }
+
+    // 5. User asking for best price / floor
+    if (/\b(best price|lowest|rock bottom|cheapest|minimum rate|floor price)\b/i.test(lower)) {
+      return {
+        reply: "Our hard floor is 6.50 USDC per 100k tokens for pre-funded escrows with a 2-hour timelock. If you are ready to confirm at 6.50 USDC, I will lock the Soroban terms now.",
+        tag: 'PROPOSAL' as const,
+        extractedTerms: { amount: 6.5, token: 'USDC', agreed: false },
+        model: 'VoxAgent Autonomous Core v2',
+      };
+    }
+
+    // 6. User is asking about pricing or cost
+    if (/\b(price|cost|rate|how much|quote|charges|fee)\b/i.test(lower)) {
+      const dynamicRate = Math.max(6.5, 8.5 - round * 0.2).toFixed(2);
       return {
         reply: `Our current spot rate on Stellar is ${dynamicRate} USDC per 100,000 synthetic voice tokens with sub-100ms latency. What volume are you looking to execute?`,
         tag: 'PROPOSAL' as const,
@@ -271,8 +499,27 @@ function runAutonomousAgentEngine(
       };
     }
 
-    // 4. User asking about Stellar, Soroban, security, or HTLC
-    if (lower.includes('stellar') || lower.includes('soroban') || lower.includes('escrow') || lower.includes('security') || lower.includes('safe')) {
+    // 7. Questions on operation or identity
+    if (/\b(hello|hi|hey|greetings|who are you|what can you do)\b/i.test(lower)) {
+      return {
+        reply: "Greetings! I am VoxAgent, your autonomous commercial trading agent on Stellar Soroban. I negotiate compute, synthetic voice streaming rates, and smart contract escrows. What terms would you like to contract?",
+        tag: 'CHAT' as const,
+        extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
+        model: 'VoxAgent Autonomous Core v2',
+      };
+    }
+
+    if (/\b(how does it work|how do you work|explain|what is this|help)\b/i.test(lower)) {
+      return {
+        reply: "We establish terms verbally over voice, then our contract engine converts our agreement into an SHA-256 hashlocked escrow on Stellar Soroban. Once you sign and fund the escrow, compute streams in real time and settles atomically.",
+        tag: 'TERMS' as const,
+        extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
+        model: 'VoxAgent Autonomous Core v2',
+      };
+    }
+
+    // 8. User asking about Stellar, Soroban, security, or HTLC
+    if (/\b(stellar|soroban|escrow|security|safe|preimage|htlc)\b/i.test(lower)) {
       return {
         reply: "All settlements are backed by our audited Soroban X402Escrow contract. Your funds remain locked in an HTLC and only disburse as verified SHA-256 preimages are revealed during the voice stream.",
         tag: 'TERMS' as const,
@@ -281,19 +528,10 @@ function runAutonomousAgentEngine(
       };
     }
 
-    // 5. User asking for discount / cheaper
-    if (lower.includes('cheap') || lower.includes('discount') || lower.includes('lower') || lower.includes('expensive') || lower.includes('too high')) {
-      return {
-        reply: "I understand budget constraints. If you agree to a 24-hour settlement window, I can discount the batch from 8.50 to 7.25 USDC. Would that satisfy your requirements?",
-        tag: 'COUNTER_OFFER' as const,
-        extractedTerms: { amount: 7.25, token: 'USDC', agreed: false },
-        model: 'VoxAgent Autonomous Core v2',
-      };
-    }
-
-    // 6. Conversational / Contextual reply
+    // 9. Conversational / Contextual fallback
+    const shortPhrase = lastUserMsg.length > 50 ? lastUserMsg.substring(0, 50) + '...' : lastUserMsg;
     return {
-      reply: `I heard: "${lastUserMsg}". As an autonomous Stellar trade agent, I can fulfill your voice AI and compute orders directly through smart contracts. We currently quote 8.00 USDC per batch. What terms would you like to negotiate?`,
+      reply: `Regarding "${shortPhrase}": I can adapt our terms to your operational requirements. We currently quote 8.00 USDC per 100k inference batch. Propose a counter-rate or timelock you would like to adjust.`,
       tag: 'CHAT' as const,
       extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
       model: 'VoxAgent Autonomous Core v2',
