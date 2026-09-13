@@ -7,6 +7,8 @@ import {
   filterSupportedGeminiModels,
   rankGeminiCandidateList,
   cleanLLMDialogue,
+  rankSpeechSynthesisVoices,
+  selectOptimalVoicePair,
   VoiceDialogueTurn,
 } from '../src/voice';
 
@@ -168,5 +170,38 @@ describe('Voice Negotiation & AI Contract Drafting Module', () => {
     expect(cleaned.tag).toBe('CHAT');
     expect(cleaned.token).toBe('USDC');
     expect(cleaned.amount).toBe(8.0);
+  });
+
+  it('should prioritize natural and neural voices over legacy robotic desktop synthesizers', () => {
+    const mockVoices = [
+      { name: 'Microsoft David Desktop - English (United States)', lang: 'en-US' },
+      { name: 'Microsoft Jenny Online (Natural) - English (United States)', lang: 'en-US' },
+      { name: 'Google US English', lang: 'en-US' },
+      { name: 'eSpeak English', lang: 'en' },
+      { name: 'Microsoft Raul - Spanish (Mexico)', lang: 'es-MX' },
+    ];
+
+    const ranked = rankSpeechSynthesisVoices(mockVoices);
+    expect(ranked[0].name).toContain('Jenny Online (Natural)');
+    expect(ranked[1].name).toContain('Google US English');
+    // Legacy desktop voices should be ranked below natural voices
+    const davidIndex = ranked.findIndex((v) => v.name.includes('David Desktop'));
+    const jennyIndex = ranked.findIndex((v) => v.name.includes('Jenny Online'));
+    expect(jennyIndex).toBeLessThan(davidIndex);
+  });
+
+  it('should select distinct complementary natural voices for bilateral simulation', () => {
+    const mockVoices = [
+      { name: 'Microsoft Jenny Online (Natural) - English (United States)', lang: 'en-US' },
+      { name: 'Microsoft Guy Online (Natural) - English (United States)', lang: 'en-US' },
+      { name: 'Google UK English Male', lang: 'en-GB' },
+    ];
+
+    const { sellerVoice, buyerVoice } = selectOptimalVoicePair(mockVoices);
+    expect(sellerVoice).toBeDefined();
+    expect(buyerVoice).toBeDefined();
+    expect(sellerVoice?.name).not.toBe(buyerVoice?.name);
+    expect(sellerVoice?.name).toContain('Jenny');
+    expect(buyerVoice?.name).toContain('Guy');
   });
 });

@@ -39,6 +39,7 @@ import {
   X
 } from 'lucide-react';
 import { isConnected, requestAccess, getPublicKey } from '@stellar/freighter-api';
+import { rankSpeechSynthesisVoices, selectOptimalVoicePair } from '@voxtrade/sdk';
 
 export type CallMode = 'user-to-agent' | 'agent-to-agent' | 'human-to-human';
 
@@ -84,6 +85,11 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
   const [userSpeechInput, setUserSpeechInput] = useState('');
   const [activeSpeaker, setActiveSpeaker] = useState<'HUMAN_A' | 'HUMAN_B'>('HUMAN_A');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Natural TTS Voice Synthesis State
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>('auto');
+  const [voiceSpeed, setVoiceSpeed] = useState<number>(1.0);
 
   // Agent-to-Agent Autonomous Sim State
   const [isAutoSimulating, setIsAutoSimulating] = useState(false);
@@ -274,14 +280,64 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     log('AI Brain reset to built-in dynamic bargaining core.', 'info');
   };
 
-  // Speech Synthesis helper
-  const speakText = (text: string, pitch = 1.0, rate = 1.0) => {
+  // Load and rank available browser SpeechSynthesis voices
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const updateVoices = () => {
+      try {
+        const raw = window.speechSynthesis.getVoices();
+        if (raw && raw.length > 0) {
+          const ranked = rankSpeechSynthesisVoices(raw);
+          setAvailableVoices(ranked as SpeechSynthesisVoice[]);
+        }
+      } catch (err) {
+        console.warn('Error loading speech voices:', err);
+      }
+    };
+
+    updateVoices();
+    window.speechSynthesis.onvoiceschanged = updateVoices;
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  // Speech Synthesis helper with Natural Neural Voice Auto-Selection
+  const speakText = (text: string, pitch = 1.0, rate = 1.0, preferredVoiceURI?: string) => {
     if (isAudioMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.pitch = pitch;
-      utterance.rate = rate;
+
+      const allVoices = window.speechSynthesis.getVoices();
+      let chosenVoice: SpeechSynthesisVoice | undefined;
+
+      // 1. Explicit preferred voice requested (e.g. for agent-to-agent bilateral counterpart)
+      if (preferredVoiceURI && preferredVoiceURI !== 'auto') {
+        chosenVoice = allVoices.find((v) => v.voiceURI === preferredVoiceURI || v.name === preferredVoiceURI);
+      }
+
+      // 2. User selected a specific voice in the UI dropdown
+      if (!chosenVoice && selectedVoiceURI !== 'auto') {
+        chosenVoice = allVoices.find((v) => v.voiceURI === selectedVoiceURI || v.name === selectedVoiceURI);
+      }
+
+      // 3. Auto-detect top ranked natural neural voice
+      if (!chosenVoice && allVoices.length > 0) {
+        const ranked = rankSpeechSynthesisVoices(allVoices);
+        chosenVoice = ranked[0] as SpeechSynthesisVoice;
+      }
+
+      if (chosenVoice) {
+        utterance.voice = chosenVoice;
+      }
+
+      // Keep pitch in natural conversational human range (0.95 to 1.05) to avoid robotic distortion
+      utterance.pitch = Math.max(0.95, Math.min(1.05, pitch));
+      utterance.rate = Math.max(0.85, Math.min(1.2, rate * voiceSpeed));
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn('Speech synthesis error:', e);
@@ -338,8 +394,17 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
         tag: data.tag || 'TERMS',
       };
 
+      const allVoices = typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : [];
+      const pair = selectOptimalVoicePair(allVoices);
+      const voiceForTurn = isBuyerTurn ? pair.buyerVoice : pair.sellerVoice;
+
       setMessages((prev) => [...prev, newMsg]);
-      speakText(data.reply, isBuyerTurn ? 1.15 : 0.88, isBuyerTurn ? 1.05 : 0.98);
+      speakText(
+        data.reply,
+        isBuyerTurn ? 1.02 : 0.98,
+        1.0,
+        voiceForTurn?.voiceURI || voiceForTurn?.name
+      );
       log(`[${senderName}] ${data.reply}`, data.tag === 'AGREEMENT' ? 'success' : 'info');
 
       setSimTurnIndex((prev) => prev + 1);
@@ -469,7 +534,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     await startAudio();
 
     if (callMode === 'user-to-agent') {
-      const welcomeText = "Connected to Sovereign Negotiation Agent. What terms or compute stream would you like to negotiate today?";
+      const welcomeText = "Hey there! Great to connect with you. I'm ready to talk compute volume and pricing—what are you looking to set up today?";
       const agentMsg: ChatMessage = {
         id: `agent-${Date.now()}`,
         sender: 'VoxAgent AI (Negotiator)',
@@ -479,13 +544,13 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
         tag: 'CHAT',
       };
       setMessages((prev) => [...prev, agentMsg]);
-      speakText(welcomeText, 1.05, 1.0);
+      speakText(welcomeText, 1.0, 1.0);
       log('Live Human-to-Agent Voice Call session connected.', 'success');
     } else if (callMode === 'agent-to-agent') {
       setIsAutoSimulating(true);
       log('Autonomous Agent-to-Agent Voice Call session started.', 'info');
     } else {
-      const welcomeText = "Human-to-Human Call established. AI Scribe is active, listening and ready to draft on-chain contracts.";
+      const welcomeText = "Human-to-Human Call connected! AI Scribe is active, listening and ready to draft on-chain terms.";
       const msg: ChatMessage = {
         id: `scribe-${Date.now()}`,
         sender: 'AI Scribe',
@@ -495,6 +560,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
         tag: 'CHAT',
       };
       setMessages((prev) => [...prev, msg]);
+      speakText(welcomeText, 1.0, 1.0);
       log('Human-to-Human Call connected with real-time AI arbitration.', 'info');
     }
   };
@@ -587,7 +653,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
       };
 
       setMessages((prev) => [...prev, agentMsg]);
-      speakText(data.reply, 1.05, 1.0);
+      speakText(data.reply, 1.0, 1.0);
       if (data.error) {
         log(`[AI Engine Error] ${data.reply}`, 'error');
       } else {
@@ -982,8 +1048,50 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
             </span>
           </div>
 
-          {/* Mic and Speaker Controls */}
-          <div className="flex items-center gap-2">
+          {/* Mic, Speaker, and Natural Neural Voice Controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Natural Neural Voice Selector */}
+            <div className="flex items-center gap-1.5 bg-obsidian-surface border border-obsidian-subtle px-2.5 py-1 text-xs">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="font-mono text-[10px] text-zinc-400 font-bold uppercase shrink-0">VOICE:</span>
+              <select
+                value={selectedVoiceURI}
+                onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                className="bg-transparent font-mono text-xs text-amber-300 focus:outline-none cursor-pointer max-w-[130px] sm:max-w-[180px] truncate"
+                title="Select Text-to-Speech Voice"
+              >
+                <option value="auto" className="bg-obsidian text-amber-400">
+                  Auto (Natural / Neural)
+                </option>
+                {availableVoices.map((v, i) => (
+                  <option key={v.voiceURI || `${v.name}-${i}`} value={v.voiceURI || v.name} className="bg-obsidian text-zinc-200">
+                    {v.name.length > 26 ? v.name.substring(0, 26) + '...' : v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Voice Speed Toggle */}
+            <button
+              type="button"
+              onClick={() => setVoiceSpeed((prev) => (prev === 1.0 ? 1.05 : prev === 1.05 ? 0.95 : 1.0))}
+              className="px-2.5 py-1.5 border border-obsidian-subtle bg-obsidian-surface hover:border-amber-500/50 font-mono text-xs font-bold text-amber-300 transition-colors cursor-pointer"
+              title="Toggle Speaking Cadence / Speed"
+            >
+              SPD: {voiceSpeed.toFixed(2)}x
+            </button>
+
+            {/* Test Voice Audio Button */}
+            <button
+              type="button"
+              onClick={() => speakText("Hey there! Natural voice synthesis is online and ready.", 1.0, 1.0)}
+              className="px-2.5 py-1.5 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500 hover:text-obsidian text-amber-300 font-mono text-xs font-bold uppercase transition-colors cursor-pointer flex items-center gap-1"
+              title="Test Voice Audio"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>TEST</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsMicMuted(!isMicMuted)}

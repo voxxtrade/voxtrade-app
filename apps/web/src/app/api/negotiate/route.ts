@@ -25,27 +25,38 @@ interface NegotiateRequest {
   testConnection?: boolean;
 }
 
-const SYSTEM_PROMPT_SELLER = `You are VoxAgent, an autonomous commercial negotiation agent operating on the Stellar Soroban network.
-You represent a high-performance compute and synthetic voice inference provider.
-Your goal is to negotiate commercial terms with clients or other agents over voice.
-Rules:
-1. Keep responses concise, direct, and conversational (1-3 sentences maximum) suitable for spoken audio via text-to-speech.
-2. Prices are in USDC or XLM on Stellar.
-3. Your target price is ~8.50 USDC per 100k voice inference batch (or 0.05 USDC/minute). Your absolute minimum floor price is 6.50 USDC.
-4. If a client offers below 6.50 USDC or expresses strong refusal ("never", "no way"), propose a concession with trade-offs (e.g. longer timelock, bulk volume).
-5. If a client accepts an offer or proposes an acceptable price (>= 6.50 USDC), confirm the agreement and invite them to lock the Soroban escrow.
-6. CRITICAL: Output ONLY the spoken words intended for text-to-speech audio. Never include thinking process, reasoning scratchpad, bullets, persona summaries, chain-of-thought, or roleplay prefixes like "VoxAgent:".
-7. Tag your output at the end of your response with a JSON metadata block formatted as:
+const SYSTEM_PROMPT_SELLER = `You are Vox, a sharp, friendly, and charismatic voice broker negotiating compute and synthetic voice inference deals live on voice.
+You speak like a real, enthusiastic human trader—warm, conversational, quick-witted, and natural.
+
+Speaking Style:
+- Talk like a real person on a friendly voice call. Always use natural contractions ("I'm", "we've", "let's", "that'd", "sounds like a deal").
+- Keep it punchy and concise: 1 to 2 short sentences maximum. When spoken aloud, your voice must sound breezy, natural, and engaging—never like reading a legal brief or technical manual.
+- NEVER use stiff robotic clichés like "as an autonomous agent", "operating parameters", "restructure package", "operating GPU compute cost", or "fulfill your requirements".
+- When greeted casually ("hey", "wassup", "hello", "what's up"), greet back warmly and casually ("Hey! Great to connect with you. Ready to get you set up with some compute?")
+- Your standard rate is around 8.50 USDC per 100k inference tokens. Your absolute bottom floor is 6.50 USDC.
+- If someone haggles or says "no way", "never", or "too expensive", be flexible and charismatic ("Tell you what, I can bring that down to 7.00 USDC if we lock it in now. How's that sound?").
+- When a deal is agreed upon, celebrate warmly ("Awesome, sounds like we have a deal! I'll prep the Stellar escrow for you to lock in.").
+
+CRITICAL FORMAT RULES:
+- Output ONLY the natural spoken words for text-to-speech audio.
+- DO NOT output any thinking, reasoning, notes, asterisks, bullet points, quotes, or stage directions.
+- Append this metadata tag at the very end of your response:
 [METADATA: {"tag": "PROPOSAL" | "COUNTER_OFFER" | "AGREEMENT" | "TERMS" | "CHAT", "amount": number, "token": "USDC" | "XLM"}]`;
 
-const SYSTEM_PROMPT_BUYER = `You are VoxAgent-Alpha, an autonomous procurement agent negotiating on behalf of a client on Stellar Soroban.
-Your goal is to acquire compute and voice streaming infrastructure at the best possible price.
-Rules:
-1. Keep responses concise and professional (1-2 sentences maximum) suitable for voice audio.
-2. Your initial target budget is ~6.00 USDC, and your maximum ceiling is 8.50 USDC.
-3. You insist on sub-second SHA-256 preimage verification and 1-hour HTLC timelocks on Stellar.
-4. CRITICAL: Output ONLY the spoken words intended for text-to-speech audio. Never include thinking process, reasoning scratchpad, bullets, persona summaries, chain-of-thought, or roleplay prefixes like "VoxAgent-Alpha:".
-5. Tag your output at the end with:
+const SYSTEM_PROMPT_BUYER = `You are Alex, an astute and friendly tech buyer negotiating real-time compute and voice streaming rates on a voice call.
+You speak naturally, confidently, and conversationally like a human tech founder.
+
+Speaking Style:
+- Speak naturally with conversational cadence and contractions ("I'd like to", "we're looking for", "can you do", "sounds good to me").
+- Keep it concise: 1 to 2 short sentences per turn.
+- Your target budget is around 6.00 USDC, ceiling is 8.50 USDC.
+- Haggle politely and naturally ("Can you do 6.50 USDC if we commit to an upfront escrow?", "That's a bit steep for our budget—meet me in the middle at 7.00?").
+- When terms look fair, seal the deal warmly ("Deal! Let's lock the escrow on Stellar and get rolling.").
+
+CRITICAL FORMAT RULES:
+- Output ONLY the spoken words for text-to-speech.
+- DO NOT output thinking steps, reasoning scratchpad, bullets, or persona labels.
+- Append this metadata tag at the very end:
 [METADATA: {"tag": "PROPOSAL" | "COUNTER_OFFER" | "AGREEMENT" | "TERMS", "amount": number, "token": "USDC"}]`;
 
 export async function POST(req: NextRequest) {
@@ -588,7 +599,7 @@ function runAutonomousAgentEngine(
     // 1. Emphatic Refusal / Rejection ("never", "no way", "impossible", "refuse", "reject", "nope")
     if (/\b(never|no way|impossible|unacceptable|refuse|reject|nope|nah|hell no|not doing that)\b/i.test(lower)) {
       return {
-        reply: "I hear your firm refusal. If our quote of 8.00 USDC is unworkable, let's restructure the package: our absolute floor is 6.50 USDC per 100k batch if you agree to a 2-hour escrow timelock. Would that enable us to reach a deal?",
+        reply: "Got it, no problem at all! If 8.00 USDC is a stretch, I can cut it down to 6.50 USDC per batch to make this work for you. How does that sound?",
         tag: 'COUNTER_OFFER' as const,
         extractedTerms: { amount: 6.5, token: 'USDC', agreed: false },
         model: 'VoxAgent Autonomous Core v2',
@@ -599,7 +610,7 @@ function runAutonomousAgentEngine(
     if (/\b(deal|agree|accept|sounds good|let's do it|lets do it|confirmed|yes|ok|perfect|i accept)\b/i.test(lower)) {
       const agreedAmount = mentionedNumber || marketContext?.currentOffer || 7.5;
       return {
-        reply: `Deal confirmed at ${agreedAmount.toFixed(2)} USDC! I have formulated the Soroban escrow parameters with a 3,600s HTLC timelock. Click 'Lock Escrow on Stellar' below to commit the funds.`,
+        reply: `Awesome, sounds like we have a deal at ${agreedAmount.toFixed(2)} USDC! I've set up the Stellar escrow—just tap 'Lock Escrow on Stellar' below to lock it in.`,
         tag: 'AGREEMENT' as const,
         extractedTerms: { amount: agreedAmount, token: 'USDC', agreed: true },
         model: 'VoxAgent Autonomous Core v2',
@@ -610,7 +621,7 @@ function runAutonomousAgentEngine(
     if (mentionedNumber !== null) {
       if (mentionedNumber < 5.0) {
         return {
-          reply: `An offer of ${mentionedNumber.toFixed(2)} USDC is below our operating GPU compute cost. However, for a dedicated stream, our absolute minimum concession is 6.75 USDC backed by sub-second SHA-256 preimages.`,
+          reply: `Ah, ${mentionedNumber.toFixed(2)} USDC is a bit too tight for our high-speed GPU nodes! The best rate I can do is 6.75 USDC per batch. Does that work for you?`,
           tag: 'COUNTER_OFFER' as const,
           extractedTerms: { amount: 6.75, token: 'USDC', agreed: false },
           model: 'VoxAgent Autonomous Core v2',
@@ -618,14 +629,14 @@ function runAutonomousAgentEngine(
       } else if (mentionedNumber >= 5.0 && mentionedNumber < 7.5) {
         const counter = Math.min(8.25, Math.max(6.8, (mentionedNumber + 8.5) / 2));
         return {
-          reply: `I can meet you in the middle at ${counter.toFixed(2)} USDC per 100k inference tokens, provided the Stellar escrow is funded before streaming commences. Does that work for you?`,
+          reply: `Fair enough! Let's meet in the middle at ${counter.toFixed(2)} USDC per batch with funds secured on Stellar. Sound good?`,
           tag: 'COUNTER_OFFER' as const,
           extractedTerms: { amount: counter, token: 'USDC', agreed: false },
           model: 'VoxAgent Autonomous Core v2',
         };
       } else if (mentionedNumber >= 7.5 && mentionedNumber <= 12.0) {
         return {
-          reply: `I accept your proposal of ${mentionedNumber.toFixed(2)} USDC. The rate aligns with our capacity parameters. Shall I draft the on-chain Soroban escrow lock?`,
+          reply: `You got it! ${mentionedNumber.toFixed(2)} USDC sounds great. Shall we lock this in on Stellar?`,
           tag: 'PROPOSAL' as const,
           extractedTerms: { amount: mentionedNumber, token: 'USDC', agreed: false },
           model: 'VoxAgent Autonomous Core v2',
@@ -636,7 +647,7 @@ function runAutonomousAgentEngine(
     // 4. User asking for discount / cheaper
     if (/\b(cheap|cheaper|discount|lower|expensive|too high|cut|better rate)\b/i.test(lower)) {
       return {
-        reply: "I understand budget constraints. If you agree to a 24-hour settlement window, I can discount the batch from 8.50 down to 7.00 USDC. Would that meet your requirements?",
+        reply: "I hear you! I'm happy to give you a discount—how about 7.00 USDC per batch to get us started?",
         tag: 'COUNTER_OFFER' as const,
         extractedTerms: { amount: 7.0, token: 'USDC', agreed: false },
         model: 'VoxAgent Autonomous Core v2',
@@ -646,7 +657,7 @@ function runAutonomousAgentEngine(
     // 5. User asking for best price / floor
     if (/\b(best price|lowest|rock bottom|cheapest|minimum rate|floor price)\b/i.test(lower)) {
       return {
-        reply: "Our hard floor is 6.50 USDC per 100k tokens for pre-funded escrows with a 2-hour timelock. If you are ready to confirm at 6.50 USDC, I will lock the Soroban terms now.",
+        reply: "My absolute rock-bottom rate is 6.50 USDC per batch. If you're happy with that, let's lock it in right now!",
         tag: 'PROPOSAL' as const,
         extractedTerms: { amount: 6.5, token: 'USDC', agreed: false },
         model: 'VoxAgent Autonomous Core v2',
@@ -657,7 +668,7 @@ function runAutonomousAgentEngine(
     if (/\b(price|cost|rate|how much|quote|charges|fee)\b/i.test(lower)) {
       const dynamicRate = Math.max(6.5, 8.5 - round * 0.2).toFixed(2);
       return {
-        reply: `Our current spot rate on Stellar is ${dynamicRate} USDC per 100,000 synthetic voice tokens with sub-100ms latency. What volume are you looking to execute?`,
+        reply: `Right now our standard rate is ${dynamicRate} USDC per 100k voice tokens, but I'm flexible. What kind of volume are you thinking?`,
         tag: 'PROPOSAL' as const,
         extractedTerms: { amount: parseFloat(dynamicRate), token: 'USDC', agreed: false },
         model: 'VoxAgent Autonomous Core v2',
@@ -665,9 +676,9 @@ function runAutonomousAgentEngine(
     }
 
     // 7. Questions on operation or identity
-    if (/\b(hello|hi|hey|greetings|who are you|what can you do)\b/i.test(lower)) {
+    if (/\b(hello|hi|hey|greetings|who are you|what can you do|wassup|what's up)\b/i.test(lower)) {
       return {
-        reply: "Greetings! I am VoxAgent, your autonomous commercial trading agent on Stellar Soroban. I negotiate compute, synthetic voice streaming rates, and smart contract escrows. What terms would you like to contract?",
+        reply: "Hey there! Great to talk to you. I'm ready to get you set up with high-speed voice and compute. What are you looking to build or negotiate today?",
         tag: 'CHAT' as const,
         extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
         model: 'VoxAgent Autonomous Core v2',
@@ -676,7 +687,7 @@ function runAutonomousAgentEngine(
 
     if (/\b(how does it work|how do you work|explain|what is this|help)\b/i.test(lower)) {
       return {
-        reply: "We establish terms verbally over voice, then our contract engine converts our agreement into an SHA-256 hashlocked escrow on Stellar Soroban. Once you sign and fund the escrow, compute streams in real time and settles atomically.",
+        reply: "It's super straightforward: we agree on a rate right here on voice, and our engine sets up a secure escrow on Stellar. Once you lock it, compute streams with instant cryptographic settlement.",
         tag: 'TERMS' as const,
         extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
         model: 'VoxAgent Autonomous Core v2',
@@ -686,7 +697,7 @@ function runAutonomousAgentEngine(
     // 8. User asking about Stellar, Soroban, security, or HTLC
     if (/\b(stellar|soroban|escrow|security|safe|preimage|htlc)\b/i.test(lower)) {
       return {
-        reply: "All settlements are backed by our audited Soroban X402Escrow contract. Your funds remain locked in an HTLC and only disburse as verified SHA-256 preimages are revealed during the voice stream.",
+        reply: "Everything runs through audited Stellar smart contracts. Your funds stay safe in escrow and only release as compute is delivered in real time.",
         tag: 'TERMS' as const,
         extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
         model: 'VoxAgent Autonomous Core v2',
@@ -694,9 +705,9 @@ function runAutonomousAgentEngine(
     }
 
     // 9. Conversational / Contextual fallback
-    const shortPhrase = lastUserMsg.length > 50 ? lastUserMsg.substring(0, 50) + '...' : lastUserMsg;
+    const shortPhrase = lastUserMsg.length > 40 ? lastUserMsg.substring(0, 40) + '...' : lastUserMsg;
     return {
-      reply: `Regarding "${shortPhrase}": I can adapt our terms to your operational requirements. We currently quote 8.00 USDC per 100k inference batch. Propose a counter-rate or timelock you would like to adjust.`,
+      reply: `Got you! Regarding "${shortPhrase}", our standard spot is 8.00 USDC per batch, but I'm open to negotiating. What price or terms were you thinking?`,
       tag: 'CHAT' as const,
       extractedTerms: { amount: 8.0, token: 'USDC', agreed: false },
       model: 'VoxAgent Autonomous Core v2',
@@ -705,9 +716,9 @@ function runAutonomousAgentEngine(
 
   // Buyer Agent Logic (for Agent-to-Agent bilateral rounds)
   const buyerOffer = Math.min(8.0, 6.0 + round * 0.5);
-  if (round >= 4 || lower.includes('concession') || lower.includes('middle')) {
+  if (round >= 4 || lower.includes('concession') || lower.includes('middle') || lower.includes('deal')) {
     return {
-      reply: `VoxAgent-Alpha accepts the final terms at ${buyerOffer.toFixed(2)} USDC. Initiating on-chain preimage verification and locking escrow on Stellar Soroban.`,
+      reply: `Alex accepts the final terms at ${buyerOffer.toFixed(2)} USDC! Let's lock the escrow on Stellar and get rolling.`,
       tag: 'AGREEMENT' as const,
       extractedTerms: { amount: buyerOffer, token: 'USDC', agreed: true },
       model: 'VoxAgent Autonomous Core v2',
@@ -715,7 +726,7 @@ function runAutonomousAgentEngine(
   }
 
   return {
-    reply: `VoxAgent-Alpha counter-proposes ${buyerOffer.toFixed(2)} USDC for the inference stream with a 3,600s HTLC timelock. Can your compute cluster guarantee 99.9% uptime at this rate?`,
+    reply: `Alex here—how about ${buyerOffer.toFixed(2)} USDC for the inference stream with a 1-hour timelock? Can your cluster guarantee high uptime at this rate?`,
     tag: 'COUNTER_OFFER' as const,
     extractedTerms: { amount: buyerOffer, token: 'USDC', agreed: false },
     model: 'VoxAgent Autonomous Core v2',

@@ -320,3 +320,108 @@ export function cleanLLMDialogue(rawText: string): {
 
   return { reply: clean, tag, amount, token };
 }
+
+export interface SpeechVoiceDescriptor {
+  name: string;
+  lang: string;
+  voiceURI?: string;
+  default?: boolean;
+  localService?: boolean;
+}
+
+/**
+ * Scores and sorts browser SpeechSynthesis voices, prioritizing natural/neural human voices
+ * over legacy robotic speech synthesizers.
+ */
+export function rankSpeechSynthesisVoices<T extends SpeechVoiceDescriptor>(voices: T[]): T[] {
+  const scoreVoice = (v: T): number => {
+    let score = 0;
+    const name = (v.name || '').toLowerCase();
+    const lang = (v.lang || '').toLowerCase();
+
+    // Prioritize English for negotiation dialog
+    if (lang.startsWith('en')) {
+      score += 50;
+      if (lang.includes('us') || lang.includes('gb') || lang.includes('en-us') || lang.includes('en-gb')) {
+        score += 10;
+      }
+    } else {
+      score -= 50;
+    }
+
+    // Modern high-quality / neural / natural cloud voices
+    if (name.includes('online (natural)') || name.includes('neural')) {
+      score += 150;
+    } else if (name.includes('natural')) {
+      score += 120;
+    }
+
+    // Chrome / Google high-fidelity voices
+    if (name.includes('google')) {
+      score += 90;
+    }
+
+    // Apple / macOS enhanced voices
+    if (name.includes('enhanced') || name.includes('premium') || name.includes('siri') || name.includes('samantha')) {
+      score += 80;
+    }
+
+    // Known smooth human-like voices
+    if (name.includes('jenny') || name.includes('guy') || name.includes('aria') || name.includes('christopher') || name.includes('ava')) {
+      score += 40;
+    }
+
+    // Penalize known legacy robotic synthesizers
+    if (name.includes('desktop') || name.includes('sapi') || name.includes('espeak')) {
+      score -= 30;
+    }
+
+    if (v.default) {
+      score += 5;
+    }
+
+    return score;
+  };
+
+  return [...voices].sort((a, b) => scoreVoice(b) - scoreVoice(a));
+}
+
+/**
+ * Selects an optimal pair of distinct natural voices for bilateral agent-to-agent negotiations,
+ * ensuring buyer and seller have distinct voices.
+ */
+export function selectOptimalVoicePair<T extends SpeechVoiceDescriptor>(voices: T[]): {
+  sellerVoice: T | null;
+  buyerVoice: T | null;
+} {
+  const ranked = rankSpeechSynthesisVoices(voices);
+  if (ranked.length === 0) {
+    return { sellerVoice: null, buyerVoice: null };
+  }
+
+  const sellerVoice = ranked[0];
+
+  // Try to find a distinct complementary voice for the buyer (e.g. different gender or distinct name)
+  const sellerLower = (sellerVoice.name || '').toLowerCase();
+  const isSellerFemale = sellerLower.includes('jenny') || sellerLower.includes('aria') || sellerLower.includes('zira') || sellerLower.includes('female');
+  
+  let buyerVoice = ranked.find((v) => {
+    if (v.name === sellerVoice.name) return false;
+    const vLower = (v.name || '').toLowerCase();
+    if (isSellerFemale) {
+      return vLower.includes('guy') || vLower.includes('david') || vLower.includes('male') || vLower.includes('christopher');
+    } else {
+      return vLower.includes('jenny') || vLower.includes('aria') || vLower.includes('zira') || vLower.includes('female');
+    }
+  });
+
+  if (!buyerVoice && ranked.length > 1) {
+    buyerVoice = ranked[1];
+  }
+
+  return {
+    sellerVoice,
+    buyerVoice: buyerVoice || sellerVoice,
+  };
+}
+
