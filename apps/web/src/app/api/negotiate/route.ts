@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   filterSupportedGeminiModels,
   rankGeminiCandidateList,
+  cleanLLMDialogue,
   GeminiModelCandidate,
 } from '@voxtrade/sdk';
 
@@ -33,7 +34,8 @@ Rules:
 3. Your target price is ~8.50 USDC per 100k voice inference batch (or 0.05 USDC/minute). Your absolute minimum floor price is 6.50 USDC.
 4. If a client offers below 6.50 USDC or expresses strong refusal ("never", "no way"), propose a concession with trade-offs (e.g. longer timelock, bulk volume).
 5. If a client accepts an offer or proposes an acceptable price (>= 6.50 USDC), confirm the agreement and invite them to lock the Soroban escrow.
-6. Tag your output at the end of your response with a JSON metadata block formatted as:
+6. CRITICAL: Output ONLY the spoken words intended for text-to-speech audio. Never include thinking process, reasoning scratchpad, bullets, persona summaries, chain-of-thought, or roleplay prefixes like "VoxAgent:".
+7. Tag your output at the end of your response with a JSON metadata block formatted as:
 [METADATA: {"tag": "PROPOSAL" | "COUNTER_OFFER" | "AGREEMENT" | "TERMS" | "CHAT", "amount": number, "token": "USDC" | "XLM"}]`;
 
 const SYSTEM_PROMPT_BUYER = `You are VoxAgent-Alpha, an autonomous procurement agent negotiating on behalf of a client on Stellar Soroban.
@@ -42,7 +44,8 @@ Rules:
 1. Keep responses concise and professional (1-2 sentences maximum) suitable for voice audio.
 2. Your initial target budget is ~6.00 USDC, and your maximum ceiling is 8.50 USDC.
 3. You insist on sub-second SHA-256 preimage verification and 1-hour HTLC timelocks on Stellar.
-4. Tag your output at the end with:
+4. CRITICAL: Output ONLY the spoken words intended for text-to-speech audio. Never include thinking process, reasoning scratchpad, bullets, persona summaries, chain-of-thought, or roleplay prefixes like "VoxAgent-Alpha:".
+5. Tag your output at the end with:
 [METADATA: {"tag": "PROPOSAL" | "COUNTER_OFFER" | "AGREEMENT" | "TERMS", "amount": number, "token": "USDC"}]`;
 
 export async function POST(req: NextRequest) {
@@ -135,25 +138,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. If an LLM is targeted, call the provider
+    // 4. Sanitize turn messages history: strip any prior system/provider errors or model-not-found text
+    const cleanTurnMessages = messages.filter((m) => {
+      const c = (m.content || '').trim();
+      if (!c) return false;
+      if (c.startsWith('[') && c.includes('Error]')) return false;
+      if (c.includes('is not found for API version')) return false;
+      if (c.includes('ModelService.ListModels')) return false;
+      return true;
+    });
+
+    const activeMessages = cleanTurnMessages.length > 0 ? cleanTurnMessages : messages;
+
+    // 5. If an LLM is targeted, call the provider
     if (activeKey && effectiveProvider !== 'auto') {
       let llmResult: any = null;
       let llmError: string | null = null;
 
       if (effectiveProvider === 'gemini') {
-        const res = await callGemini(activeKey, messages, agentRole, model);
+        const res = await callGemini(activeKey, activeMessages, agentRole, model);
         if (res.success) llmResult = res.data;
         else llmError = res.error || 'Gemini API call failed';
       } else if (effectiveProvider === 'groq') {
-        const res = await callGroq(activeKey, messages, agentRole);
+        const res = await callGroq(activeKey, activeMessages, agentRole);
         if (res.success) llmResult = res.data;
         else llmError = res.error || 'Groq API call failed';
       } else if (effectiveProvider === 'openai') {
-        const res = await callOpenAI(activeKey, messages, agentRole);
+        const res = await callOpenAI(activeKey, activeMessages, agentRole);
         if (res.success) llmResult = res.data;
         else llmError = res.error || 'OpenAI API call failed';
       } else if (effectiveProvider === 'anthropic') {
-        const res = await callAnthropic(activeKey, messages, agentRole);
+        const res = await callAnthropic(activeKey, activeMessages, agentRole);
         if (res.success) llmResult = res.data;
         else llmError = res.error || 'Anthropic API call failed';
       }
@@ -175,8 +190,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Autonomous Dynamic Reasoning Engine (Deterministic & Heuristic Multi-Turn Agent)
-    const autonomousRes = runAutonomousAgentEngine(messages, agentRole, marketContext);
+    // 6. Autonomous Dynamic Reasoning Engine (Deterministic & Heuristic Multi-Turn Agent)
+    const autonomousRes = runAutonomousAgentEngine(activeMessages, agentRole, marketContext);
     return NextResponse.json(autonomousRes);
   } catch (error: any) {
     console.error('Negotiation API error:', error);
@@ -540,34 +555,10 @@ async function callAnthropic(
 }
 
 function parseLLMOutput(rawText: string, model: string) {
-  let cleanReply = rawText;
-  let tag: 'PROPOSAL' | 'COUNTER_OFFER' | 'AGREEMENT' | 'TERMS' | 'CHAT' = 'CHAT';
-  let amount = 8.0;
-  let token = 'USDC';
-
-  const metadataMatch = rawText.match(/\[METADATA:\s*(\{.*?\})\s*\]/s);
-  if (metadataMatch) {
-    cleanReply = rawText.replace(metadataMatch[0], '').trim();
-    try {
-      const parsed = JSON.parse(metadataMatch[1]);
-      if (parsed.tag) tag = parsed.tag;
-      if (parsed.amount) amount = Number(parsed.amount);
-      if (parsed.token) token = parsed.token;
-    } catch {}
-  } else {
-    // Heuristic tag detection if model forgot metadata
-    const lower = cleanReply.toLowerCase();
-    if (lower.includes('deal') || lower.includes('agree') || lower.includes('confirm') || lower.includes('accepted')) {
-      tag = 'AGREEMENT';
-    } else if (lower.includes('counter') || lower.includes('instead') || lower.includes('how about')) {
-      tag = 'COUNTER_OFFER';
-    } else if (lower.includes('usdc') || lower.includes('xlm') || lower.includes('rate') || lower.includes('price')) {
-      tag = 'PROPOSAL';
-    }
-  }
+  const { reply, tag, amount, token } = cleanLLMDialogue(rawText);
 
   return {
-    reply: cleanReply,
+    reply,
     tag,
     extractedTerms: {
       amount,

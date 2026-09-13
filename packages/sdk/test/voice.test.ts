@@ -6,6 +6,7 @@ import {
   formatTranscriptJson,
   filterSupportedGeminiModels,
   rankGeminiCandidateList,
+  cleanLLMDialogue,
   VoiceDialogueTurn,
 } from '../src/voice';
 
@@ -157,5 +158,15 @@ describe('Voice Negotiation & AI Contract Drafting Module', () => {
 
     const ranked = rankGeminiCandidateList(candidates, 'gemini-1.5-pro');
     expect(ranked[0].modelName).toBe('gemini-1.5-pro');
+  });
+
+  it('should clean and extract spoken response from LLM chain-of-thought scratchpad output', () => {
+    const rawCoT = `* User says: "wassup" * Context: Commercial negotiation for high-performance compute and synthetic voice inference. * Persona: VoxAgent (concise, direct, professional but conversational). * Goal: Move the conversation toward negotiating terms (price/volume). * The user is being casual. I should acknowledge but pivot quickly to the business objective. * Response: "Not much, just ready to talk compute. What kind of inference volume are you looking for?" * Tag: \`CHAT\` * Amount: 0 * Token: \`USDC\` [METADATA: {"tag": "CHAT", "amount": 8.0, "token": "USDC"}]`;
+
+    const cleaned = cleanLLMDialogue(rawCoT);
+    expect(cleaned.reply).toBe('Not much, just ready to talk compute. What kind of inference volume are you looking for?');
+    expect(cleaned.tag).toBe('CHAT');
+    expect(cleaned.token).toBe('USDC');
+    expect(cleaned.amount).toBe(8.0);
   });
 });

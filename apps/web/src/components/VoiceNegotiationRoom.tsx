@@ -35,6 +35,7 @@ import {
   Settings,
   Key,
   Cpu,
+  Trash2,
   X
 } from 'lucide-react';
 import { isConnected, requestAccess, getPublicKey } from '@stellar/freighter-api';
@@ -544,7 +545,14 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
 
     try {
       const history = messages
-        .filter((m) => m.role === 'human' || m.role === 'provider_agent')
+        .filter((m) => {
+          if (m.role !== 'human' && m.role !== 'provider_agent') return false;
+          const t = (m.text || '').trim();
+          if (t.startsWith('[') && t.includes('Error]')) return false;
+          if (t.includes('is not found for API version')) return false;
+          if (t.includes('ModelService.ListModels')) return false;
+          return true;
+        })
         .map((m) => ({
           role: m.role === 'human' ? ('user' as const) : ('assistant' as const),
           content: m.text,
@@ -1107,6 +1115,28 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
               >
                 <FileText className="w-3 h-3" />
                 <span>TRANSCRIPT.MD</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMessages([
+                    {
+                      id: `init-${Date.now()}`,
+                      sender: 'System AI Drafter',
+                      role: 'ai_drafter',
+                      text: 'Voice Negotiation Room ready. Speak or type an offer to begin.',
+                      timestamp: new Date().toLocaleTimeString(),
+                      tag: 'CHAT',
+                    },
+                  ]);
+                  setContractDraft(null);
+                  log('Conversation transcript reset.', 'info');
+                }}
+                className="bg-obsidian-surface hover:bg-rose-600 hover:text-white text-alabaster border border-obsidian-subtle px-2.5 py-1 font-mono text-[10px] font-bold uppercase flex items-center gap-1 transition-colors cursor-pointer"
+                title="Clear Transcript History"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>CLEAR</span>
               </button>
             </div>
           </div>

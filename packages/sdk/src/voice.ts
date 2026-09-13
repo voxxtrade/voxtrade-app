@@ -249,3 +249,74 @@ export function rankGeminiCandidateList(
 
   return [...candidates].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
 }
+
+/**
+ * Sanitizes and extracts the true conversational voice reply from an LLM output,
+ * stripping reasoning scratchpads, bullet artifacts, chain-of-thought, and metadata tags.
+ */
+export function cleanLLMDialogue(rawText: string): {
+  reply: string;
+  tag: 'PROPOSAL' | 'COUNTER_OFFER' | 'AGREEMENT' | 'TERMS' | 'CHAT';
+  amount: number;
+  token: string;
+} {
+  let clean = (rawText || '').trim();
+  let tag: 'PROPOSAL' | 'COUNTER_OFFER' | 'AGREEMENT' | 'TERMS' | 'CHAT' = 'CHAT';
+  let amount = 8.0;
+  let token = 'USDC';
+
+  // 1. Extract and remove [METADATA: {...}] block
+  const metadataMatch = clean.match(/\[METADATA:\s*(\{.*?\})\s*\]/is);
+  if (metadataMatch) {
+    clean = clean.replace(metadataMatch[0], '').trim();
+    try {
+      const parsed = JSON.parse(metadataMatch[1]);
+      if (parsed.tag) tag = parsed.tag;
+      if (parsed.amount) amount = Number(parsed.amount);
+      if (parsed.token) token = parsed.token;
+    } catch {}
+  }
+
+  // 2. If the LLM leaked chain-of-thought scratchpad with "Response: ..." or "* Response: ..."
+  const explicitResponseMatch = clean.match(/(?:^|\*|\n)\s*(?:Response|Final Response|Spoken Response|Reply):\s*["“]?([^"”\n\r*]+)["”]?/i);
+  if (explicitResponseMatch && explicitResponseMatch[1]?.trim()) {
+    clean = explicitResponseMatch[1].trim();
+  } else {
+    // 3. Strip any scratchpad reasoning bullets if present
+    const lines = clean.split('\n');
+    const filteredLines = lines.filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      if (/^(\*|-)\s*(User says|Context|Persona|Goal|Constraint Check|Metadata|Thinking|Analysis):/i.test(trimmed)) {
+        return false;
+      }
+      return true;
+    });
+    clean = filteredLines.join(' ').trim();
+
+    // If inline bullet separators exist: e.g. "* User says: ... * Response: ... "
+    if (clean.includes('* User says:') || clean.includes('* Context:')) {
+      const subMatch = clean.match(/\*\s*(?:Response|Reply):\s*["“]?([^"”*]+)["”]?/i);
+      if (subMatch && subMatch[1]?.trim()) {
+        clean = subMatch[1].trim();
+      }
+    }
+  }
+
+  // 4. Strip any leftover wrapping quotes
+  clean = clean.replace(/^["'“`]+|["'”`]+$/g, '').trim();
+
+  // 5. If model forgot metadata, perform heuristic tag extraction
+  if (!metadataMatch) {
+    const lower = clean.toLowerCase();
+    if (lower.includes('deal') || lower.includes('agree') || lower.includes('confirm') || lower.includes('accepted')) {
+      tag = 'AGREEMENT';
+    } else if (lower.includes('counter') || lower.includes('instead') || lower.includes('how about')) {
+      tag = 'COUNTER_OFFER';
+    } else if (lower.includes('usdc') || lower.includes('xlm') || lower.includes('rate') || lower.includes('price')) {
+      tag = 'PROPOSAL';
+    }
+  }
+
+  return { reply: clean, tag, amount, token };
+}
