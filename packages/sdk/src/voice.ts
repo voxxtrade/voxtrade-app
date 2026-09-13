@@ -170,3 +170,82 @@ export function formatTranscriptJson(
     2
   );
 }
+
+export interface GeminiModelCandidate {
+  apiVersion: 'v1beta' | 'v1';
+  modelName: string;
+  displayName?: string;
+}
+
+/**
+ * Filters raw models returned by Google ModelService.ListModels to only those
+ * that explicitly support the 'generateContent' method.
+ */
+export function filterSupportedGeminiModels(
+  rawModels: any[],
+  apiVersion: 'v1beta' | 'v1' = 'v1beta'
+): GeminiModelCandidate[] {
+  if (!Array.isArray(rawModels)) return [];
+  const result: GeminiModelCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const m of rawModels) {
+    if (!m || typeof m !== 'object') continue;
+    const name: string = m.name || '';
+    const cleanName = name.replace(/^models\//, '').trim();
+    if (!cleanName) continue;
+
+    const methods: string[] = Array.isArray(m.supportedGenerationMethods)
+      ? m.supportedGenerationMethods
+      : [];
+
+    if (methods.includes('generateContent') && !seen.has(cleanName)) {
+      seen.add(cleanName);
+      result.push({
+        apiVersion,
+        modelName: cleanName,
+        displayName: m.displayName || cleanName,
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Ranks Gemini model candidates so that modern, fast flash models (2.0-flash, 2.5-flash, 1.5-flash-002)
+ * are prioritized over older or deprecated variants, respecting user preferences.
+ */
+export function rankGeminiCandidateList(
+  candidates: GeminiModelCandidate[],
+  preferredModel?: string
+): GeminiModelCandidate[] {
+  const cleanPref = (preferredModel || '').replace(/^models\//, '').trim().toLowerCase();
+
+  const scoreCandidate = (c: GeminiModelCandidate): number => {
+    const n = c.modelName.toLowerCase();
+    if (cleanPref && cleanPref !== 'auto' && n === cleanPref) return 1000;
+
+    // Prioritize 2.0 / 2.5 Flash
+    if (n.includes('2.0-flash') || n.includes('2.5-flash')) return 200;
+    if (n.includes('2.0')) return 180;
+
+    // Versioned 1.5 Flash
+    if (n === 'gemini-1.5-flash-002') return 160;
+    if (n === 'gemini-1.5-flash-001') return 150;
+    if (n === 'gemini-1.5-flash-8b') return 145;
+
+    // Notice: v1 for gemini-1.5-flash is preferred over v1beta to avoid 'not found for v1beta'
+    if (n === 'gemini-1.5-flash' && c.apiVersion === 'v1') return 140;
+    if (n === 'gemini-1.5-flash') return 130;
+    if (n.includes('1.5-flash')) return 120;
+
+    // Pro models
+    if (n.includes('1.5-pro')) return 110;
+    if (n.includes('pro')) return 100;
+
+    return 50;
+  };
+
+  return [...candidates].sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+}

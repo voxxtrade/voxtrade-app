@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  filterSupportedGeminiModels,
+  rankGeminiCandidateList,
+  GeminiModelCandidate,
+} from '@voxtrade/sdk';
 
 interface NegotiateRequest {
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
@@ -15,6 +20,7 @@ interface NegotiateRequest {
   };
   customApiKey?: string;
   provider?: 'gemini' | 'openai' | 'groq' | 'anthropic' | 'auto';
+  model?: string;
   testConnection?: boolean;
 }
 
@@ -49,6 +55,7 @@ export async function POST(req: NextRequest) {
       marketContext,
       customApiKey,
       provider = 'auto',
+      model,
       testConnection = false,
     } = body;
 
@@ -93,18 +100,38 @@ export async function POST(req: NextRequest) {
       }
 
       const testMsgs = [{ role: 'user' as const, content: 'Ping' }];
-      let testRes: { success: boolean; data?: any; error?: string };
+      let testRes: {
+        success: boolean;
+        data?: any;
+        error?: string;
+        activeModel?: string;
+        availableModels?: string[];
+      };
 
-      if (effectiveProvider === 'gemini') testRes = await callGemini(activeKey, testMsgs, 'seller');
-      else if (effectiveProvider === 'groq') testRes = await callGroq(activeKey, testMsgs, 'seller');
-      else if (effectiveProvider === 'openai') testRes = await callOpenAI(activeKey, testMsgs, 'seller');
-      else if (effectiveProvider === 'anthropic') testRes = await callAnthropic(activeKey, testMsgs, 'seller');
-      else testRes = { success: false, error: 'Unknown provider' };
+      if (effectiveProvider === 'gemini') {
+        testRes = await callGemini(activeKey, testMsgs, 'seller', model);
+      } else if (effectiveProvider === 'groq') {
+        testRes = await callGroq(activeKey, testMsgs, 'seller');
+      } else if (effectiveProvider === 'openai') {
+        testRes = await callOpenAI(activeKey, testMsgs, 'seller');
+      } else if (effectiveProvider === 'anthropic') {
+        testRes = await callAnthropic(activeKey, testMsgs, 'seller');
+      } else {
+        testRes = { success: false, error: 'Unknown provider' };
+      }
 
       if (testRes.success) {
-        return NextResponse.json({ ok: true, model: testRes.data?.model || effectiveProvider });
+        return NextResponse.json({
+          ok: true,
+          model: testRes.data?.model || testRes.activeModel || effectiveProvider,
+          availableModels: testRes.availableModels || [],
+        });
       } else {
-        return NextResponse.json({ ok: false, error: testRes.error || 'Provider connection rejected' });
+        return NextResponse.json({
+          ok: false,
+          error: testRes.error || 'Provider connection rejected',
+          availableModels: testRes.availableModels || [],
+        });
       }
     }
 
@@ -114,7 +141,7 @@ export async function POST(req: NextRequest) {
       let llmError: string | null = null;
 
       if (effectiveProvider === 'gemini') {
-        const res = await callGemini(activeKey, messages, agentRole);
+        const res = await callGemini(activeKey, messages, agentRole, model);
         if (res.success) llmResult = res.data;
         else llmError = res.error || 'Gemini API call failed';
       } else if (effectiveProvider === 'groq') {
@@ -165,87 +192,85 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// In-memory cache for resolved Gemini model per API key
-const geminiModelCache = new Map<string, { apiVersion: string; modelName: string }>();
+// In-memory cache for verified working Gemini model per API key
+const geminiModelCache = new Map<string, GeminiModelCandidate>();
 
-async function resolveGeminiModel(apiKey: string): Promise<{ apiVersion: string; modelName: string }> {
-  if (geminiModelCache.has(apiKey)) {
-    return geminiModelCache.get(apiKey)!;
+// Discovered supported models per API key
+const geminiDiscoveryCache = new Map<string, GeminiModelCandidate[]>();
+
+async function getGeminiCandidateList(apiKey: string, preferredModel?: string): Promise<GeminiModelCandidate[]> {
+  let discovered = geminiDiscoveryCache.get(apiKey);
+
+  if (!discovered || discovered.length === 0) {
+    const list: GeminiModelCandidate[] = [];
+
+    // 1. Probe v1beta ListModels
+    try {
+      const resBeta = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (resBeta.ok) {
+        const data = await resBeta.json();
+        const betaSupported = filterSupportedGeminiModels(data.models || [], 'v1beta');
+        list.push(...betaSupported);
+      }
+    } catch (e) {
+      console.warn('[Gemini Discovery] v1beta error:', e);
+    }
+
+    // 2. Probe v1 ListModels
+    try {
+      const resV1 = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (resV1.ok) {
+        const data = await resV1.json();
+        const v1Supported = filterSupportedGeminiModels(data.models || [], 'v1');
+        list.push(...v1Supported);
+      }
+    } catch (e) {
+      console.warn('[Gemini Discovery] v1 error:', e);
+    }
+
+    // 3. Fallback well-known models in case ListModels was restricted or returned empty
+    const WELL_KNOWN_FALLBACKS: GeminiModelCandidate[] = [
+      { apiVersion: 'v1beta', modelName: 'gemini-2.0-flash' },
+      { apiVersion: 'v1beta', modelName: 'gemini-2.0-flash-exp' },
+      { apiVersion: 'v1', modelName: 'gemini-1.5-flash' },
+      { apiVersion: 'v1beta', modelName: 'gemini-1.5-flash-002' },
+      { apiVersion: 'v1beta', modelName: 'gemini-1.5-flash-001' },
+      { apiVersion: 'v1beta', modelName: 'gemini-1.5-flash-8b' },
+      { apiVersion: 'v1beta', modelName: 'gemini-1.5-pro' },
+      { apiVersion: 'v1', modelName: 'gemini-pro' },
+      { apiVersion: 'v1beta', modelName: 'gemini-1.5-flash' },
+    ];
+
+    for (const fb of WELL_KNOWN_FALLBACKS) {
+      if (!list.some((existing) => existing.apiVersion === fb.apiVersion && existing.modelName === fb.modelName)) {
+        list.push(fb);
+      }
+    }
+
+    discovered = list;
+    geminiDiscoveryCache.set(apiKey, discovered);
   }
 
-  const priorityNames = [
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash-001',
-    'gemini-1.5-flash-002',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-pro-latest',
-    'gemini-1.5-pro',
-    'gemini-pro',
-  ];
-
-  // 1. Probe v1beta ListModels
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    if (res.ok) {
-      const data = await res.json();
-      const models = data.models || [];
-
-      for (const pName of priorityNames) {
-        const found = models.find((m: any) => {
-          const name = m.name?.replace('models/', '');
-          const canGen = m.supportedGenerationMethods?.includes('generateContent');
-          return canGen && name === pName;
-        });
-        if (found) {
-          const resolved = { apiVersion: 'v1beta', modelName: found.name.replace('models/', '') };
-          geminiModelCache.set(apiKey, resolved);
-          return resolved;
-        }
-      }
-
-      const anyCandidate = models.find((m: any) => 
-        m.supportedGenerationMethods?.includes('generateContent') && m.name?.includes('gemini')
-      );
-      if (anyCandidate) {
-        const resolved = { apiVersion: 'v1beta', modelName: anyCandidate.name.replace('models/', '') };
-        geminiModelCache.set(apiKey, resolved);
-        return resolved;
-      }
-    }
-  } catch (e) {}
-
-  // 2. Probe v1 ListModels
-  try {
-    const resV1 = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
-    if (resV1.ok) {
-      const data = await resV1.json();
-      const models = data.models || [];
-      const anyCandidate = models.find((m: any) => 
-        m.supportedGenerationMethods?.includes('generateContent') && m.name?.includes('gemini')
-      );
-      if (anyCandidate) {
-        const resolved = { apiVersion: 'v1', modelName: anyCandidate.name.replace('models/', '') };
-        geminiModelCache.set(apiKey, resolved);
-        return resolved;
-      }
-    }
-  } catch (e) {}
-
-  // Safe fallback
-  const fallback = { apiVersion: 'v1beta', modelName: 'gemini-1.5-flash-latest' };
-  geminiModelCache.set(apiKey, fallback);
-  return fallback;
+  return rankGeminiCandidateList(discovered, preferredModel);
 }
 
-// Call Google Gemini API
+// Call Google Gemini API with multi-model auto-failover
 async function callGemini(
   apiKey: string,
   messages: Array<{ role: string; content: string }>,
-  role: 'buyer' | 'seller'
-): Promise<{ success: boolean; data?: any; error?: string }> {
+  role: 'buyer' | 'seller',
+  preferredModel?: string
+): Promise<{
+  success: boolean;
+  data?: any;
+  error?: string;
+  activeModel?: string;
+  availableModels?: string[];
+}> {
   try {
     const systemPrompt = role === 'buyer' ? SYSTEM_PROMPT_BUYER : SYSTEM_PROMPT_SELLER;
 
@@ -270,67 +295,103 @@ async function callGemini(
       contents.unshift({ role: 'user', parts: [{ text: 'Hello, I would like to negotiate compute terms.' }] });
     }
 
-    // Auto-discover the supported Gemini model for this user's API key
-    const { apiVersion, modelName } = await resolveGeminiModel(apiKey);
+    // Auto-discover candidate models for this user's API key
+    const rankedCandidates = await getGeminiCandidateList(apiKey, preferredModel);
+    const distinctModelNames = Array.from(new Set(rankedCandidates.map((c) => c.modelName)));
 
-    const tryGenerate = async (v: string, m: string) => {
-      const url = `https://generativelanguage.googleapis.com/${v}/models/${m}:generateContent?key=${apiKey}`;
+    // Prepare candidate attempt queue
+    const queue: GeminiModelCandidate[] = [];
+
+    // If cached working model exists and no overriding preferred model, put cached first
+    const cached = geminiModelCache.get(apiKey);
+    if (cached && (!preferredModel || preferredModel === 'auto' || preferredModel === cached.modelName)) {
+      queue.push(cached);
+    }
+
+    for (const c of rankedCandidates) {
+      if (!queue.some((q) => q.apiVersion === c.apiVersion && q.modelName === c.modelName)) {
+        queue.push(c);
+      }
+    }
+
+    let lastError = '';
+    let chosenSuccess: { data: any; modelName: string } | null = null;
+
+    for (const cand of queue) {
+      const url = `https://generativelanguage.googleapis.com/${cand.apiVersion}/models/${cand.modelName}:generateContent?key=${apiKey}`;
+
+      // Deep copy contents so modifications don't accumulate across attempts
+      const runContents = contents.map((c) => ({
+        role: c.role,
+        parts: c.parts.map((p) => ({ text: p.text })),
+      }));
+
       const payload: any = {
-        contents,
+        contents: runContents,
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 250,
         },
       };
 
-      if (m.includes('1.5') || m.includes('2.0')) {
+      if (!cand.modelName.includes('gemini-1.0') && !cand.modelName.includes('gemini-pro')) {
         payload.system_instruction = { parts: [{ text: systemPrompt }] };
       } else {
-        if (contents.length > 0 && contents[0].role === 'user') {
-          contents[0].parts[0].text = `[System Instructions: ${systemPrompt}]\n\n${contents[0].parts[0].text}`;
+        if (runContents.length > 0 && runContents[0].role === 'user') {
+          runContents[0].parts[0].text = `[System Instructions: ${systemPrompt}]\n\n${runContents[0].parts[0].text}`;
         }
       }
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-      return { res, modelName: m };
-    };
-
-    let attempt = await tryGenerate(apiVersion, modelName);
-
-    // If 404 / model not found, try fallback candidates
-    if (!attempt.res.ok) {
-      const errJson = await attempt.res.json().catch(() => ({}));
-      const msg = errJson.error?.message || '';
-
-      if (attempt.res.status === 404 || msg.includes('not found') || msg.includes('not supported')) {
-        geminiModelCache.delete(apiKey);
-        const fallbacks = ['gemini-1.5-flash-latest', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-pro'];
-        for (const fb of fallbacks) {
-          if (fb === modelName) continue;
-          const fbAttempt = await tryGenerate('v1beta', fb);
-          if (fbAttempt.res.ok) {
-            attempt = fbAttempt;
-            geminiModelCache.set(apiKey, { apiVersion: 'v1beta', modelName: fb });
+        if (res.ok) {
+          const resData = await res.json();
+          const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (rawText.trim()) {
+            geminiModelCache.set(apiKey, cand);
+            chosenSuccess = {
+              data: parseLLMOutput(rawText, `Google Gemini (${cand.modelName})`),
+              modelName: cand.modelName,
+            };
             break;
           }
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          const msg = errJson.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+          lastError = msg;
+          console.warn(`[Gemini Attempt Failed] ${cand.apiVersion}/${cand.modelName}: ${msg}`);
+
+          // Invalidate cache if cached model fails
+          if (cached && cached.modelName === cand.modelName && cached.apiVersion === cand.apiVersion) {
+            geminiModelCache.delete(apiKey);
+          }
+          // Continue loop to next candidate
         }
+      } catch (fetchErr: any) {
+        lastError = fetchErr?.message || 'Network exception connecting to Gemini API';
+        console.warn(`[Gemini Attempt Exception] ${cand.apiVersion}/${cand.modelName}: ${lastError}`);
       }
     }
 
-    if (!attempt.res.ok) {
-      const errJson = await attempt.res.json().catch(() => ({}));
-      const msg = errJson.error?.message || `HTTP ${attempt.res.status}: ${attempt.res.statusText}`;
-      return { success: false, error: msg };
+    if (chosenSuccess) {
+      return {
+        success: true,
+        data: chosenSuccess.data,
+        activeModel: chosenSuccess.modelName,
+        availableModels: distinctModelNames,
+      };
     }
 
-    const data = await attempt.res.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return { success: true, data: parseLLMOutput(rawText, `Google Gemini (${attempt.modelName})`) };
+    return {
+      success: false,
+      error: lastError || 'All Gemini model candidates were rejected by the API endpoint.',
+      availableModels: distinctModelNames,
+    };
   } catch (e: any) {
     return { success: false, error: e?.message || 'Network exception connecting to Gemini' };
   }

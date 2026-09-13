@@ -144,11 +144,12 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     }
   }, [messages]);
 
-  // Load custom API key & provider on mount
+  // Load custom API key, provider & model preference on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedKey = localStorage.getItem('voxtrade_custom_api_key');
       const storedProv = localStorage.getItem('voxtrade_llm_provider') as any;
+      const storedModel = localStorage.getItem('voxtrade_llm_model');
       if (storedKey) {
         setUserApiKey(storedKey);
         setInputApiKey(storedKey);
@@ -157,8 +158,13 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
         setSelectedProvider(storedProv);
         setInputProvider(storedProv);
       }
-      if (storedKey && storedProv === 'gemini') setActiveEngineModel('Google Gemini 1.5');
-      else if (storedKey && storedProv === 'openai') setActiveEngineModel('OpenAI gpt-4o-mini');
+      if (storedModel) {
+        setSelectedModel(storedModel);
+        setInputModel(storedModel);
+      }
+      if (storedKey && storedProv === 'gemini') {
+        setActiveEngineModel(storedModel && storedModel !== 'auto' ? `Google Gemini (${storedModel})` : 'Google Gemini (Auto)');
+      } else if (storedKey && storedProv === 'openai') setActiveEngineModel('OpenAI gpt-4o-mini');
       else if (storedKey && storedProv === 'groq') setActiveEngineModel('Groq Llama-3.1');
       else if (storedKey && storedProv === 'anthropic') setActiveEngineModel('Claude 3.5 Haiku');
     }
@@ -166,6 +172,9 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
 
   const [inputApiKey, setInputApiKey] = useState('');
   const [inputProvider, setInputProvider] = useState<'auto' | 'gemini' | 'openai' | 'groq' | 'anthropic'>('auto');
+  const [selectedModel, setSelectedModel] = useState<string>('auto');
+  const [inputModel, setInputModel] = useState<string>('auto');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isTestingKey, setIsTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -194,12 +203,19 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
         body: JSON.stringify({
           customApiKey: key,
           provider: inputProvider,
+          model: inputModel !== 'auto' ? inputModel : undefined,
           testConnection: true,
         }),
       });
       const data = await res.json();
+      if (data.availableModels && Array.isArray(data.availableModels) && data.availableModels.length > 0) {
+        setAvailableModels(data.availableModels);
+      }
       if (data.ok) {
         setTestResult({ ok: true, message: `Connected successfully! Active model: ${data.model}` });
+        if (data.model && activeEngineModel !== data.model) {
+          setActiveEngineModel(data.model);
+        }
       } else {
         setTestResult({ ok: false, message: data.error || 'Connection rejected by provider' });
       }
@@ -214,6 +230,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
     const key = inputApiKey.trim();
     setUserApiKey(key);
     setSelectedProvider(inputProvider);
+    setSelectedModel(inputModel);
     if (typeof window !== 'undefined') {
       if (key) {
         localStorage.setItem('voxtrade_custom_api_key', key);
@@ -221,25 +238,35 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
         localStorage.removeItem('voxtrade_custom_api_key');
       }
       localStorage.setItem('voxtrade_llm_provider', inputProvider);
+      if (inputModel && inputModel !== 'auto') {
+        localStorage.setItem('voxtrade_llm_model', inputModel);
+      } else {
+        localStorage.removeItem('voxtrade_llm_model');
+      }
     }
-    if (inputProvider === 'gemini') setActiveEngineModel(key ? 'Google Gemini 1.5' : 'Gemini (Auto)');
-    else if (inputProvider === 'openai') setActiveEngineModel(key ? 'OpenAI gpt-4o-mini' : 'OpenAI (Auto)');
+    if (inputProvider === 'gemini') {
+      setActiveEngineModel(inputModel !== 'auto' ? `Google Gemini (${inputModel})` : (key ? 'Google Gemini (Auto)' : 'Gemini (Default)'));
+    } else if (inputProvider === 'openai') setActiveEngineModel(key ? 'OpenAI gpt-4o-mini' : 'OpenAI (Auto)');
     else if (inputProvider === 'groq') setActiveEngineModel(key ? 'Groq Llama-3.1' : 'Groq (Auto)');
     else if (inputProvider === 'anthropic') setActiveEngineModel(key ? 'Claude 3.5 Haiku' : 'Anthropic (Auto)');
     else setActiveEngineModel('VoxAgent Core v2 (Dynamic)');
     setShowKeyModal(false);
-    log(`AI Brain config updated to ${inputProvider.toUpperCase()}`, 'info');
+    log(`AI Brain config updated to ${inputProvider.toUpperCase()}${inputModel !== 'auto' ? ` [${inputModel}]` : ''}`, 'info');
   };
 
   const resetAiSettings = () => {
     setInputApiKey('');
     setInputProvider('auto');
+    setInputModel('auto');
+    setAvailableModels([]);
     setUserApiKey('');
     setSelectedProvider('auto');
+    setSelectedModel('auto');
     setTestResult(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('voxtrade_custom_api_key');
       localStorage.setItem('voxtrade_llm_provider', 'auto');
+      localStorage.removeItem('voxtrade_llm_model');
     }
     setActiveEngineModel('VoxAgent Core v2 (Dynamic)');
     setShowKeyModal(false);
@@ -533,6 +560,7 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
           agentRole: 'seller',
           customApiKey: userApiKey || undefined,
           provider: selectedProvider,
+          model: selectedModel !== 'auto' ? selectedModel : undefined,
         }),
       });
 
@@ -1469,39 +1497,87 @@ export default function VoiceNegotiationRoom({ onLog, connectedWallet }: VoiceNe
                 </div>
 
                 {inputProvider !== 'auto' && (
-                  <div className="space-y-2">
-                    <label className="flex items-center justify-between text-xs font-mono font-bold uppercase text-obsidian">
-                      <span>API Key ({inputProvider.toUpperCase()})</span>
-                      <span className="text-[10px] text-obsidian/60 font-normal">Auto-detects format</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Key className="w-4 h-4 text-obsidian/40 absolute left-3 top-3" />
-                        <input
-                          type="password"
-                          value={inputApiKey}
-                          onChange={(e) => handleApiKeyChange(e.target.value)}
-                          placeholder={
-                            inputProvider === 'gemini'
-                              ? 'AIzaSy...'
-                              : inputProvider === 'groq'
-                              ? 'gsk_...'
-                              : inputProvider === 'anthropic'
-                              ? 'sk-ant-...'
-                              : 'sk-...'
-                          }
-                          className="w-full bg-alabaster border-2 border-obsidian pl-9 pr-3 py-2.5 font-mono text-xs font-bold text-obsidian placeholder:text-obsidian/40 focus:outline-none focus:bg-white"
-                        />
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="flex items-center justify-between text-xs font-mono font-bold uppercase text-obsidian">
+                        <span>API Key ({inputProvider.toUpperCase()})</span>
+                        <span className="text-[10px] text-obsidian/60 font-normal">Auto-detects format</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Key className="w-4 h-4 text-obsidian/40 absolute left-3 top-3" />
+                          <input
+                            type="password"
+                            value={inputApiKey}
+                            onChange={(e) => handleApiKeyChange(e.target.value)}
+                            placeholder={
+                              inputProvider === 'gemini'
+                                ? 'AIzaSy...'
+                                : inputProvider === 'groq'
+                                ? 'gsk_...'
+                                : inputProvider === 'anthropic'
+                                ? 'sk-ant-...'
+                                : 'sk-...'
+                            }
+                            className="w-full bg-alabaster border-2 border-obsidian pl-9 pr-3 py-2.5 font-mono text-xs font-bold text-obsidian placeholder:text-obsidian/40 focus:outline-none focus:bg-white"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={runKeyTest}
+                          disabled={isTestingKey || !inputApiKey.trim()}
+                          className="bg-obsidian hover:bg-obsidian/85 disabled:bg-zinc-300 text-amber-300 disabled:text-zinc-500 border-2 border-obsidian px-3 py-2 font-mono text-xs font-bold uppercase shrink-0 cursor-pointer active:scale-95 transition-all"
+                        >
+                          {isTestingKey ? 'TESTING...' : 'TEST KEY'}
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={runKeyTest}
-                        disabled={isTestingKey || !inputApiKey.trim()}
-                        className="bg-obsidian hover:bg-obsidian/85 disabled:bg-zinc-300 text-amber-300 disabled:text-zinc-500 border-2 border-obsidian px-3 py-2 font-mono text-xs font-bold uppercase shrink-0 cursor-pointer active:scale-95 transition-all"
-                      >
-                        {isTestingKey ? 'TESTING...' : 'TEST KEY'}
-                      </button>
                     </div>
+
+                    {/* Interactive Model Selection */}
+                    {inputProvider === 'gemini' && (
+                      <div className="space-y-1.5 bg-alabaster/70 border-2 border-obsidian/40 p-2.5">
+                        <label className="flex items-center justify-between text-[11px] font-mono font-bold uppercase text-obsidian">
+                          <span>Target Model / Version</span>
+                          <span className="text-[10px] text-jade-700 font-semibold font-mono">Failover Active</span>
+                        </label>
+                        <select
+                          value={inputModel}
+                          onChange={(e) => setInputModel(e.target.value)}
+                          className="w-full bg-white border-2 border-obsidian px-2.5 py-1.5 font-mono text-xs font-bold text-obsidian focus:outline-none cursor-pointer"
+                        >
+                          <option value="auto">Auto-Detect Best (2.0 Flash / 1.5 Flash Failover)</option>
+                          <option value="gemini-2.0-flash">gemini-2.0-flash (Recommended, Ultra-Fast)</option>
+                          <option value="gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
+                          <option value="gemini-1.5-flash">gemini-1.5-flash (v1 GA Endpoint)</option>
+                          <option value="gemini-1.5-flash-002">gemini-1.5-flash-002</option>
+                          <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b</option>
+                          <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                          <option value="gemini-pro">gemini-pro</option>
+                          {availableModels
+                            .filter(
+                              (m) =>
+                                ![
+                                  'auto',
+                                  'gemini-2.0-flash',
+                                  'gemini-2.0-flash-exp',
+                                  'gemini-1.5-flash',
+                                  'gemini-1.5-flash-002',
+                                  'gemini-1.5-flash-8b',
+                                  'gemini-1.5-pro',
+                                  'gemini-pro',
+                                ].includes(m)
+                            )
+                            .map((m) => (
+                              <option key={m} value={m}>
+                                {m} (Discovered from your key)
+                              </option>
+                            ))}
+                        </select>
+                        <p className="text-[10px] text-obsidian/60 leading-tight">
+                          If a model returns 404 or is unavailable on your key tier, VoxTrade automatically falls back to your project&apos;s verified working models.
+                        </p>
+                      </div>
+                    )}
 
                     {testResult && (
                       <div

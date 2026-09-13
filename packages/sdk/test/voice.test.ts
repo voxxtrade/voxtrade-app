@@ -4,6 +4,8 @@ import {
   draftContractSpecFromVoice,
   formatTranscriptMarkdown,
   formatTranscriptJson,
+  filterSupportedGeminiModels,
+  rankGeminiCandidateList,
   VoiceDialogueTurn,
 } from '../src/voice';
 
@@ -104,5 +106,56 @@ describe('Voice Negotiation & AI Contract Drafting Module', () => {
     expect(parsed.transcript.length).toBe(4);
     expect(parsed.contractSpec.amountUsdc).toBe(8.0);
     expect(parsed.contractSpec.buyer).toBe(buyer);
+  });
+
+  it('should filter raw Google ListModels entries strictly by generateContent support', () => {
+    const rawGoogleModels = [
+      {
+        name: 'models/text-embedding-004',
+        supportedGenerationMethods: ['embedContent'],
+      },
+      {
+        name: 'models/gemini-1.5-flash',
+        supportedGenerationMethods: ['generateContent', 'countTokens'],
+      },
+      {
+        name: 'models/gemini-2.0-flash',
+        supportedGenerationMethods: ['generateContent'],
+      },
+      {
+        name: 'models/aqa',
+        supportedGenerationMethods: ['generateAnswer'],
+      },
+    ];
+
+    const filtered = filterSupportedGeminiModels(rawGoogleModels, 'v1beta');
+    expect(filtered.length).toBe(2);
+    expect(filtered.map((m) => m.modelName)).toEqual(['gemini-1.5-flash', 'gemini-2.0-flash']);
+    expect(filtered[0].apiVersion).toBe('v1beta');
+  });
+
+  it('should prioritize modern 2.0-flash and rank v1 higher for gemini-1.5-flash', () => {
+    const candidates = [
+      { apiVersion: 'v1beta' as const, modelName: 'gemini-1.5-flash' },
+      { apiVersion: 'v1' as const, modelName: 'gemini-1.5-flash' },
+      { apiVersion: 'v1beta' as const, modelName: 'gemini-2.0-flash' },
+      { apiVersion: 'v1beta' as const, modelName: 'gemini-1.5-pro' },
+    ];
+
+    const ranked = rankGeminiCandidateList(candidates);
+    expect(ranked[0].modelName).toBe('gemini-2.0-flash');
+    expect(ranked[1].modelName).toBe('gemini-1.5-flash');
+    expect(ranked[1].apiVersion).toBe('v1'); // v1 prioritized over v1beta for 1.5-flash to avoid 404
+    expect(ranked[2].apiVersion).toBe('v1beta');
+  });
+
+  it('should promote user preferred model to top priority', () => {
+    const candidates = [
+      { apiVersion: 'v1beta' as const, modelName: 'gemini-2.0-flash' },
+      { apiVersion: 'v1beta' as const, modelName: 'gemini-1.5-pro' },
+    ];
+
+    const ranked = rankGeminiCandidateList(candidates, 'gemini-1.5-pro');
+    expect(ranked[0].modelName).toBe('gemini-1.5-pro');
   });
 });
