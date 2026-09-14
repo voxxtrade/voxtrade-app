@@ -1,8 +1,8 @@
 ---
 name: "🟢 Low Complexity Task"
 about: "Focused fix, UI polish, documentation update, or small helper addition"
-title: "[Low]: "
-labels: ["complexity: low"]
+title: "feat(scope): "
+labels: ["complexity: low", "good first issue"]
 assignees: ""
 ---
 

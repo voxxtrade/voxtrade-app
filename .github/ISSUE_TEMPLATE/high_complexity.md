@@ -1,8 +1,8 @@
 ---
 name: "🔴 High Complexity Task"
 about: "Cryptographic protocol logic, Soroban smart contract bindings, or major architectural refactor"
-title: "[High]: "
-labels: ["complexity: high"]
+title: "feat(scope): "
+labels: ["complexity: high", "enhancement"]
 assignees: ""
 ---
 

@@ -1,8 +1,8 @@
 ---
 name: "🟡 Medium Complexity Task"
 about: "Feature implementation, React hook, SDK helper, or test suite expansion"
-title: "[Medium]: "
-labels: ["complexity: medium"]
+title: "feat(scope): "
+labels: ["complexity: medium", "enhancement"]
 assignees: ""
 ---
 
