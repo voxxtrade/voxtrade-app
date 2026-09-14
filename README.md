@@ -193,6 +193,9 @@ VoxTrade is currently in active development. The smart contracts and off-chain S
 
 We welcome contributions from the ecosystem! Whether it's optimizing the SDK's XDR parsing, expanding test coverage, or refining the Next.js dashboard, please read our [CONTRIBUTING.md](CONTRIBUTING.md) to understand our workflow, branch protections, and PR requirements.
 
+- 🧪 **Stellar Testnet Guide**: Review our **[Stellar Testnet Setup Guide](docs/testnet-setup.md)** to configure your Freighter wallet, claim Friendbot lumens, and set up USDC trustlines.
+- 🤝 **Community Standards**: Contributions are governed by our **[Code of Conduct](CODE_OF_CONDUCT.md)**.
+
 ## Maintainers
 
 | Role | Contact |
@@ -202,3 +205,5 @@ We welcome contributions from the ecosystem! Whether it's optimizing the SDK's X
 ## License
 
 Released under the [MIT License](LICENSE).
+
+

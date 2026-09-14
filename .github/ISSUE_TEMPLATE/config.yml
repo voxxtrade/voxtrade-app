@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Stellar Community Discord
+    url: https://discord.gg/stellar
+    about: Connect with other Stellar and Soroban developers in the ecosystem.
