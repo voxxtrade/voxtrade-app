@@ -78,22 +78,33 @@ export default function FreighterConnect() {
                 FREIGHTER AUTHORIZED
               </span>
             </div>
-            <div className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase text-amber-900 bg-amber-100 px-2 py-0.5 border border-amber-300 rounded-xs">
-              <ShieldCheck className="w-3 h-3 text-amber-700" />
-              <span>TESTNET</span>
+            <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase text-emerald-950 bg-emerald-100 px-2 py-0.5 border border-emerald-300 rounded-xs shadow-xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+              </span>
+              <ShieldCheck className="w-3 h-3 text-emerald-700" />
+              <span>STELLAR TESTNET</span>
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-2 bg-alabaster border border-obsidian/20 p-2 rounded-xs">
-            <span className="font-mono text-xs font-semibold truncate text-obsidian">
-              {publicKey.slice(0, 8)}...{publicKey.slice(-8)}
-            </span>
+            <a
+              href={`https://stellar.expert/explorer/testnet/account/${publicKey}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View account on Stellar Expert Testnet Explorer"
+              className="font-mono text-xs font-semibold truncate text-obsidian hover:text-amber-700 hover:underline inline-flex items-center gap-1 group/link"
+            >
+              <span>{publicKey.slice(0, 8)}...{publicKey.slice(-8)}</span>
+              <ExternalLink className="w-3 h-3 text-obsidian/40 group-hover/link:text-amber-700 shrink-0" />
+            </a>
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={copyAddress}
               title="Copy Public Key"
-              className="px-2.5 py-1 bg-white hover:bg-amber-50 text-obsidian border border-obsidian/30 font-mono text-xs font-bold flex items-center gap-1 shrink-0 shadow-xs"
+              className="px-2.5 py-1 bg-white hover:bg-amber-50 text-obsidian border border-obsidian/30 font-mono text-xs font-bold flex items-center gap-1 shrink-0 shadow-xs cursor-pointer"
             >
               {copied ? (
                 <>
@@ -115,6 +126,24 @@ export default function FreighterConnect() {
 
   return (
     <div className="w-full space-y-2.5">
+      <div className="flex items-center justify-between px-1 text-xs font-mono">
+        <div className="flex items-center gap-1.5 text-obsidian/70">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+          </span>
+          <span className="font-bold text-[11px] uppercase tracking-wider text-obsidian">Stellar Testnet</span>
+        </div>
+        <a
+          href="https://stellar.expert/explorer/testnet"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] uppercase font-bold text-obsidian/50 hover:text-amber-700 flex items-center gap-1 transition-colors"
+        >
+          Explorer <ExternalLink className="w-2.5 h-2.5" />
+        </a>
+      </div>
+
       <motion.button
         whileHover={{ x: -1.5, y: -1.5, boxShadow: '5px 5px 0px 0px #0D0F12' }}
         whileTap={{ x: 1.5, y: 1.5, boxShadow: '0px 0px 0px 0px #0D0F12' }}
