@@ -13,6 +13,7 @@
     <a href="https://voxtrade-rho.vercel.app"><strong>Live Web App</strong></a> &bull;
     <a href="https://voxxtrade.github.io/docs/"><strong>Docs Portal</strong></a> &bull;
     <a href="https://github.com/voxxtrade/voxtrade-contract"><strong>VoxTrade Contracts</strong></a> &bull;
+    <a href="#what-is-voxtrade-app"><strong>What is this Repo?</strong></a> &bull;
     <a href="#published-stellar-testnet-contracts"><strong>Published Contracts</strong></a> &bull;
     <a href="#stellar-ecosystem-integration"><strong>Stellar Integration</strong></a> &bull;
     <a href="#architectural-rationale-why-two-smart-contracts"><strong>Why 2 Contracts?</strong></a> &bull;
@@ -24,11 +25,24 @@
 
 ---
 
-> Part of the **[VoxTrade](https://github.com/voxxtrade)** suite. This repository provides the off-chain infrastructure for Sovereign Voice-to-Voice Commerce, bridging the gap between human merchants, AI Agents, and the Soroban smart contracts.
->
-> 🚀 **Live Web Application**: Access the 3-mode Voice Negotiation Room and Merchant Dashboard at **[`https://voxtrade-rho.vercel.app`](https://voxtrade-rho.vercel.app)**.
->
-> 📖 **Official Documentation**: Guides, architecture deep dives, and API specifications are available at **[`https://voxxtrade.github.io/docs/`](https://voxxtrade.github.io/docs/)**.
+## What is `voxtrade-app`?
+
+**`voxtrade-app`** is the **full-stack application and developer SDK repository** for the [VoxTrade](https://github.com/voxxtrade) protocol. It provides the off-chain merchant command center, TypeScript client libraries, and real-time voice streaming pipelines that connect human traders, autonomous AI agents, and Stellar Soroban smart contracts.
+
+This monorepo contains:
+
+1. **[`@voxtrade/sdk`](packages/sdk)** (`packages/sdk`): A TypeScript/JavaScript client library providing type-safe bindings for Soroban smart contracts (`AgentTreasury` & `X402Escrow`), network constants (`STELLAR_NETWORKS`, RPC endpoints), cryptographic preimage utilities (`SHA-256`), and Web Audio stream pipelines for voice processing.
+2. **[Merchant Web Dashboard & Voice Room](apps/web)** (`apps/web`): A Next.js 15 web application featuring:
+   - **Freighter Wallet Authentication**: Non-custodial sign-in via `@stellar/freighter-api`.
+   - **Treasury Control Center**: Real-time 24-hour spending budget allocation, balance monitoring, and key rotation.
+   - **3-Mode Voice Negotiation Room**: Live Voice-to-Voice AI negotiation powered by Gemini Live audio streaming, acoustic testbench telemetry, and manual simulation.
+   - **X402 Settlement Inspector**: Visual tracking of HTTP 402 challenge-response escrows and Stellar Expert explorer integration.
+3. **HTTP 402 API Endpoints**: Serverless Next.js route handlers implementing machine-to-machine HTTP 402 payment negotiation handshakes (`/api/x402` and `/api/negotiate`).
+
+> ⛓️ **Looking for the Smart Contracts?** Visit **[`voxxtrade/voxtrade-contract`](https://github.com/voxxtrade/voxtrade-contract)** for the Soroban Rust contracts (`AgentTreasury.wasm` and `X402Escrow.wasm`).  
+> 🚀 **Live Web Application**: **[`https://voxtrade-rho.vercel.app`](https://voxtrade-rho.vercel.app)**  
+> 📖 **Official Documentation**: **[`https://voxxtrade.github.io/docs/`](https://voxxtrade.github.io/docs/)**
+
 
 ---
 
