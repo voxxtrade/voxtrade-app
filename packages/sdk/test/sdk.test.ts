@@ -1,7 +1,19 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { AgentTreasury } from '../src/treasury';
 import { X402Escrow } from '../src/escrow';
 import { parseX402Challenge, formatX402Authorization, generatePreimage } from '../src/x402';
+import {
+  TESTNET_ESCROW_ID,
+  MAINNET_ESCROW_ID,
+  TESTNET_TREASURY_ID,
+  MAINNET_TREASURY_ID,
+  TESTNET_TREASURY_WASM_HASH,
+  TESTNET_USDC_CONTRACT_ID,
+  NETWORK_PASSPHRASES,
+  SOROBAN_RPC_URLS,
+  STELLAR_NETWORKS,
+} from '../src';
+
 
 describe('VoxTrade SDK', () => {
   const rpcUrl = 'https://soroban-testnet.stellar.org';
@@ -116,4 +128,46 @@ describe('VoxTrade SDK', () => {
       expect(hashLockHex.length).toBe(64);
     });
   });
+
+  describe('Constants and Network Configuration', () => {
+    it('should export valid Testnet and Mainnet escrow contract IDs', () => {
+      expect(TESTNET_ESCROW_ID).toBe('CDJS3VHPBXVSFIPA6FUBVS3YXKUGZ75GQ7TQFVPMHBX3KHMREGGNMLFE');
+      expect(TESTNET_ESCROW_ID.length).toBe(56);
+      expect(TESTNET_ESCROW_ID.startsWith('C')).toBe(true);
+      expect(typeof MAINNET_ESCROW_ID).toBe('string');
+    });
+
+    it('should export valid Treasury IDs and WASM hash', () => {
+      expect(TESTNET_TREASURY_ID).toBe('CCBZLHEHRUBAHGB72ZZLNHBT4RURGTW2SSSQC4DJDDILVDG4VR55FEJL');
+      expect(TESTNET_TREASURY_ID.length).toBe(56);
+      expect(TESTNET_TREASURY_ID.startsWith('C')).toBe(true);
+      expect(typeof MAINNET_TREASURY_ID).toBe('string');
+      expect(TESTNET_TREASURY_WASM_HASH).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it('should export valid USDC contract ID', () => {
+      expect(TESTNET_USDC_CONTRACT_ID).toBe('CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75');
+    });
+
+    it('should export standard Stellar network passphrases', () => {
+      expect(NETWORK_PASSPHRASES.TESTNET).toBe('Test SDF Network ; September 2015');
+      expect(NETWORK_PASSPHRASES.MAINNET).toBe('Public Global Stellar Network ; July 2015');
+      expect(NETWORK_PASSPHRASES.FUTURENET).toBeDefined();
+      expect(NETWORK_PASSPHRASES.STANDALONE).toBeDefined();
+    });
+
+    it('should export standard Soroban RPC endpoints', () => {
+      expect(SOROBAN_RPC_URLS.TESTNET).toBe('https://soroban-testnet.stellar.org');
+      expect(SOROBAN_RPC_URLS.MAINNET).toBe('https://mainnet.stellar.org:443');
+    });
+
+    it('should configure STELLAR_NETWORKS preset correctly', () => {
+      expect(STELLAR_NETWORKS.testnet.escrowContractId).toBe(TESTNET_ESCROW_ID);
+      expect(STELLAR_NETWORKS.testnet.treasuryContractId).toBe(TESTNET_TREASURY_ID);
+      expect(STELLAR_NETWORKS.testnet.networkPassphrase).toBe(NETWORK_PASSPHRASES.TESTNET);
+      expect(STELLAR_NETWORKS.testnet.rpcUrl).toBe(SOROBAN_RPC_URLS.TESTNET);
+      expect(STELLAR_NETWORKS.mainnet.networkPassphrase).toBe(NETWORK_PASSPHRASES.MAINNET);
+    });
+  });
 });
+
