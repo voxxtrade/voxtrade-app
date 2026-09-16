@@ -64,7 +64,7 @@ sequenceDiagram
     autonumber
     participant Merchant as Merchant (Browser)
     participant UI as Next.js UI
-    participant SDK as @voxtrade/sdk
+    participant SDK as "@voxtrade/sdk"
     participant RPC as Soroban RPC
     participant Contract as Soroban Network
 
