@@ -277,11 +277,15 @@ We welcome contributions from the ecosystem! Whether it's optimizing the SDK's X
 - 🧪 **Stellar Testnet Guide**: Review our **[Stellar Testnet Setup Guide](docs/testnet-setup.md)** to configure your Freighter wallet, claim Friendbot lumens, and set up USDC trustlines.
 - 🤝 **Community Standards**: Contributions are governed by our **[Code of Conduct](CODE_OF_CONDUCT.md)**.
 
-## Maintainers
+## Contributors
 
-| Role | Contact |
-|---|---|
-| **VoxTrade Core Team** | [GitHub](https://github.com/voxxtrade) |
+Thanks to all the incredible people who contribute to VoxTrade!
+
+<a href="https://github.com/voxxtrade/voxtrade-app/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=voxxtrade/voxtrade-app" alt="VoxTrade App Contributors" />
+</a>
+
+Contributions of any kind are welcome! Please check out our [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ## License
 
