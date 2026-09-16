@@ -14,6 +14,8 @@
     <a href="https://voxxtrade.github.io/docs/"><strong>Docs Portal</strong></a> &bull;
     <a href="https://github.com/voxxtrade/voxtrade-contract"><strong>VoxTrade Contracts</strong></a> &bull;
     <a href="#published-stellar-testnet-contracts"><strong>Published Contracts</strong></a> &bull;
+    <a href="#stellar-ecosystem-integration"><strong>Stellar Integration</strong></a> &bull;
+    <a href="#architectural-rationale-why-two-smart-contracts"><strong>Why 2 Contracts?</strong></a> &bull;
     <a href="#getting-started"><strong>Getting Started</strong></a> &bull;
     <a href="#system-architecture--rpc-flow"><strong>Architecture</strong></a> &bull;
     <a href="#sdk-integration"><strong>SDK Integration</strong></a>
@@ -42,6 +44,40 @@ The VoxTrade core contracts are deployed on the **Stellar Testnet**:
 - **Network**: Stellar Testnet (`Test SDF Network ; September 2015`)
 - **Soroban RPC**: `https://soroban-testnet.stellar.org`
 - **USDC Asset**: `CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75`
+
+---
+
+## Stellar Ecosystem Integration
+
+`voxtrade-app` provides the off-chain merchant command center and TypeScript client layer directly connected to the Stellar and Soroban network:
+
+| Stellar Technology | Integration & Role in `voxtrade-app` |
+| :--- | :--- |
+| **Freighter Wallet Extension** | Non-custodial authentication via `@stellar/freighter-api`. Merchants sign `AgentTreasury` deployment, parameter configuration, key rotation, and balance withdrawal envelopes directly from the browser. |
+| **Stellar Asset Contract (SAC / SEP-0041)** | Manages enterprise stablecoin custody (e.g. Testnet USDC `CCW6...MI75`). The `@voxtrade/sdk` interfaces with SAC token contracts for trustless balance verification and escrow locks. |
+| **Soroban RPC Infrastructure** | High-throughput interaction with `https://soroban-testnet.stellar.org`. Automatically handles footprint resolution, fee budget calculation, transaction simulation, and asynchronous ledger polling. |
+| **Atomic Cross-Contract Execution** | Orchestrates calls where the user's `AgentTreasury` contract transfers SAC tokens and registers escrow records on `X402Escrow` within an atomic ledger sequence. |
+| **IETF HTTP 402 + Stellar Alignment** | Bridges Web2 HTTP streaming status codes (`402 Payment Required`) with Stellar Soroban HTLC escrows, creating an automated micropayment loop for real-time voice synthesis. |
+
+---
+
+## Architectural Rationale: Why Two Smart Contracts?
+
+VoxTrade intentionally deploys **exactly two focused smart contracts** (`AgentTreasury` and `X402Escrow`) to adhere to core smart account and distributed system principles:
+
+1. **Separation of Policy Vault vs. Market Settlement (Least Privilege)**:
+   - **`AgentTreasury` is an Account Abstraction Vault**: Represents the merchant's account. It strictly enforces security policies: 24-hour spending caps, delegated AI agent keys, and admin withdrawal authority.
+   - **`X402Escrow` is an Atomic Market Settlement Engine**: Holds tokens in trustless HTLC custody until a cryptographic SHA-256 preimage is revealed or a timeout ledger sequence is reached.
+   - **Security Isolation**: If market settlement and treasury custody were combined, an exploit in deal negotiation or counterparty dispute could drain the merchant's vault. Decoupling them ensures an adversarial counterparty can never access treasury collateral outside of explicitly locked escrows.
+
+2. **Multi-Tenant Settlement vs. Dedicated Merchant Vaults**:
+   - `X402Escrow` is deployed once as a shared, stateless multi-tenant utility for the entire Stellar ecosystem.
+   - `AgentTreasury` is instantiated per merchant or enterprise to manage individual signing delegation and risk parameters.
+
+3. **Reusing Native Stellar Primitives**:
+   - **No Custom Token Contract**: Uses Stellar's native Stellar Asset Contract (SAC) for USDC and XLM instead of introducing proprietary token contracts.
+   - **No Custom DEX / Swap Contract**: Directly leverages Stellar's built-in orderbooks and liquidity pools when conversion is required.
+   - **Off-Chain Audio Transport**: Audio streams travel peer-to-peer via WebRTC and HTTP 402; only 32-byte cryptographic hashes and payment proofs touch the Soroban ledger, keeping state rent and execution latency at absolute minimums.
 
 ---
 
